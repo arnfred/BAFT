@@ -42,6 +42,7 @@
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <iterator>
+#include <iostream>
 
 #ifndef CV_IMPL_ADD
 #define CV_IMPL_ADD(x)
@@ -68,78 +69,30 @@ HarrisResponses(const Mat& img, const std::vector<Rect>& layerinfo,
     CV_Assert( img.type() == CV_8UC1 && blockSize*blockSize <= 2048 );
 
     size_t ptidx, ptsize = pts.size();
-
-    const uchar* ptr00 = img.ptr<uchar>();
-    int step = (int)(img.step/img.elemSize1());
-    int r = blockSize/2;
-
     float scale = 1.f/((1 << 2) * blockSize * 255.f);
     float scale_sq_sq = scale * scale * scale * scale;
-
-    AutoBuffer<int> ofsbuf(blockSize*blockSize);
-    int* ofs = ofsbuf;
-    for( int i = 0; i < blockSize; i++ )
-        for( int j = 0; j < blockSize; j++ )
-            ofs[i*blockSize + j] = (int)(i*step + j);
-
-    for( ptidx = 0; ptidx < ptsize; ptidx++ )
+    int r = blockSize/2;
+    for( ptidx= 0; ptidx < ptsize; ptidx++ )
     {
-        int x0 = cvRound(pts[ptidx].pt.x);
-        int y0 = cvRound(pts[ptidx].pt.y);
-        int z = pts[ptidx].octave;
+        KeyPoint kp = pts[ptidx];
+        int z = kp.octave;
+        int x = cvRound(kp.pt.x) + layerinfo[z].x;
+        int y = cvRound(kp.pt.y) + layerinfo[z].y;
+        // Cut out region of interest:
+        // Ech out the cut-out of the mat and compare with the values from below
+        Mat t;
+        Mat ut = img(Range(y - r - 1, y + r + 2), Range(x - r - 1, x + r + 2));
+        ut.convertTo(t, CV_32S);
+        Mat t_x = (t(Range(1, t.rows - 1), Range(2, t.cols)) -
+                    t(Range(1, t.rows - 1), Range(0, t.cols - 2)));
+        Mat t_y = (t(Range(2, t.rows), Range(1, t.cols - 1)) -
+                    t(Range(0, t.rows - 2), Range(1, t.cols - 1)));
+        int a = sum(t_x.mul(t_x))[0];
+        int b = sum(t_y.mul(t_y))[0];
+        int c = sum(t_x.mul(t_y))[0];
 
-        const uchar* ptr0 = ptr00 + (y0 - r + layerinfo[z].y)*step + x0 - r + layerinfo[z].x;
-        int a = 0, b = 0, c = 0;
-
-        for( int k = 0; k < blockSize*blockSize; k++ )
-        {
-            const uchar* ptr = ptr0 + ofs[k];
-            int Ix = (ptr[1] - ptr[-1])*2 + (ptr[-step+1] - ptr[-step-1]) + (ptr[step+1] - ptr[step-1]);
-            int Iy = (ptr[step] - ptr[-step])*2 + (ptr[step-1] - ptr[-step-1]) + (ptr[step+1] - ptr[-step+1]);
-            a += Ix*Ix;
-            b += Iy*Iy;
-            c += Ix*Iy;
-        }
-        pts[ptidx].response = ((float)a * b - (float)c * c -
+        kp.response = ((float)a * b - (float)c * c -
                                harris_k * ((float)a + b) * ((float)a + b))*scale_sq_sq;
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-static void ICAngles(const Mat& img, const std::vector<Rect>& layerinfo,
-                     std::vector<KeyPoint>& pts, const std::vector<int> & u_max, int half_k)
-{
-    int step = (int)img.step1();
-    size_t ptidx, ptsize = pts.size();
-
-    for( ptidx = 0; ptidx < ptsize; ptidx++ )
-    {
-        const Rect& layer = layerinfo[pts[ptidx].octave];
-        const uchar* center = &img.at<uchar>(cvRound(pts[ptidx].pt.y) + layer.y, cvRound(pts[ptidx].pt.x) + layer.x);
-
-        int m_01 = 0, m_10 = 0;
-
-        // Treat the center line differently, v=0
-        for (int u = -half_k; u <= half_k; ++u)
-            m_10 += u * center[u];
-
-        // Go line by line in the circular patch
-        for (int v = 1; v <= half_k; ++v)
-        {
-            // Proceed over the two lines
-            int v_sum = 0;
-            int d = u_max[v];
-            for (int u = -d; u <= d; ++u)
-            {
-                int val_plus = center[u + v*step], val_minus = center[u - v*step];
-                v_sum += (val_plus - val_minus);
-                m_10 += u * (val_plus + val_minus);
-            }
-            m_01 += v * v_sum;
-        }
-
-        pts[ptidx].angle = fastAtan2((float)m_01, (float)m_10);
     }
 }
 
@@ -668,10 +621,8 @@ int DAFT_Impl::defaultNorm() const
  * @param keypoints the resulting keypoints, clustered per level
  */
 static void computeKeyPoints(const Mat& imagePyramid,
-                             const UMat& uimagePyramid,
                              const Mat& maskPyramid,
                              const std::vector<Rect>& layerInfo,
-                             const UMat& ulayerInfo,
                              const std::vector<float>& layerScale,
                              std::vector<KeyPoint>& allKeypoints,
                              int nfeatures, double scaleFactor,
@@ -790,7 +741,7 @@ static void computeKeyPoints(const Mat& imagePyramid,
 
     nkeypoints = (int)allKeypoints.size();
 
-    ICAngles(imagePyramid, layerInfo, allKeypoints, umax, halfPatchSize);
+    //ICAngles(imagePyramid, layerInfo, allKeypoints, umax, halfPatchSize);
 
     for( i = 0; i < nkeypoints; i++ )
     {
@@ -859,7 +810,6 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     std::vector<int> layerOfs(nLevels);
     std::vector<float> layerScale(nLevels);
     Mat imagePyramid, maskPyramid;
-    UMat uimagePyramid, ulayerInfo;
 
     int level_dy = image.rows + border*2;
     Point level_ofs(0,0);
@@ -940,8 +890,8 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     {
 
         // Get keypoints, those will be far enough from the border that no check will be required for the descriptor
-        computeKeyPoints(imagePyramid, uimagePyramid, maskPyramid,
-                         layerInfo, ulayerInfo, layerScale, keypoints,
+        computeKeyPoints(imagePyramid, maskPyramid,
+                         layerInfo, layerScale, keypoints,
                          nfeatures, scaleFactor, edgeThreshold, patchSize, scoreType, fastThreshold);
     }
     else
