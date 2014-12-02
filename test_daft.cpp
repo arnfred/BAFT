@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
 
   if (argc != 2) {
     cerr << "Error introducing input arguments!" << endl;
-    cerr << "The format needs to be: ./test_akaze_features_port img" << endl;
+    cerr << "The format needs to be: ./test_daft img" << endl;
     return -1;
   }
 
@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
   double t1 = 0.0, t2 = 0.0;
   double takaze = 0.0;
 
-  // Detect ORB features in the input image
+  // Detect DAFT features in the input image
   vector<cv::KeyPoint> kpts;
   cv::Mat desc;
 
@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
 
   draw_keypoints(img, kpts);
 
-  // Show the detected ORB features
+  // Show the detected DAFT features
   cv::imshow("DAFT", img);
   cv::waitKey(0);
 

@@ -64,7 +64,7 @@ const float HARRIS_K = 0.04f;
  */
 static void
 HarrisResponses(const Mat& img, const std::vector<Rect>& layerinfo,
-                std::vector<KeyPoint>& pts, int blockSize, float harris_k)
+                std::vector<KeyPoint>& pts, const Mat& eig, int blockSize, float harris_k)
 {
     CV_Assert( img.type() == CV_8UC1 && blockSize*blockSize <= 2048 );
 
@@ -72,6 +72,8 @@ HarrisResponses(const Mat& img, const std::vector<Rect>& layerinfo,
     float scale = 1.f/((1 << 2) * blockSize * 255.f);
     float scale_sq_sq = scale * scale * scale * scale;
     int r = blockSize/2;
+    Mat eig_vec(1, 2, CV_32F);
+    Mat eig_val(2, 2, CV_32F);
     for( ptidx= 0; ptidx < ptsize; ptidx++ )
     {
         KeyPoint kp = pts[ptidx];
@@ -79,18 +81,29 @@ HarrisResponses(const Mat& img, const std::vector<Rect>& layerinfo,
         int x = cvRound(kp.pt.x) + layerinfo[z].x;
         int y = cvRound(kp.pt.y) + layerinfo[z].y;
         // Cut out region of interest:
-        // Ech out the cut-out of the mat and compare with the values from below
         Mat t;
         Mat ut = img(Range(y - r - 1, y + r + 2), Range(x - r - 1, x + r + 2));
         ut.convertTo(t, CV_32S);
-        Mat t_x = (t(Range(1, t.rows - 1), Range(2, t.cols)) -
+        Mat dx = (t(Range(1, t.rows - 1), Range(2, t.cols)) -
                     t(Range(1, t.rows - 1), Range(0, t.cols - 2)));
-        Mat t_y = (t(Range(2, t.rows), Range(1, t.cols - 1)) -
+        Mat dy = (t(Range(2, t.rows), Range(1, t.cols - 1)) -
                     t(Range(0, t.rows - 2), Range(1, t.cols - 1)));
-        int a = sum(t_x.mul(t_x))[0];
-        int b = sum(t_y.mul(t_y))[0];
-        int c = sum(t_x.mul(t_y))[0];
+        int a = sum(dx.mul(dx))[0];
+        int b = sum(dy.mul(dy))[0];
+        int c = sum(dx.mul(dy))[0];
 
+        // Find eigenvectors of estimated covariance matrix
+        Mat corr = (Mat_<float>(2, 2) << static_cast<float>(a), static_cast<float>(c),
+                                         static_cast<float>(c), static_cast<float>(b));
+        eigen(corr, eig_vec, eig_val);
+        sqrt(eig_vec.t() / std::sqrt(eig_vec.at<float>(0)*eig_vec.at<float>(1)), eig_vec);
+        if (ptidx == 0) {
+            cout << eig_vec << "\n";
+        }
+        eig_vec.copyTo(eig(Range(ptidx, ptidx+1), Range(0,2)));
+        eig_val.row(0).copyTo(eig(Range(ptidx, ptidx+1), Range(2,4)));
+
+        // Add HarrisResponse to keypoint
         kp.response = ((float)a * b - (float)c * c -
                                harris_k * ((float)a + b) * ((float)a + b))*scale_sq_sq;
     }
@@ -674,6 +687,7 @@ static void computeKeyPoints(const Mat& imagePyramid,
     for( level = 0; level < nlevels; level++ )
     {
         int featuresNum = nfeaturesPerLevel[level];
+        cout << "Layerinfo: " << layerInfo[level] << "\n";
         Mat img = imagePyramid(layerInfo[level]);
         Mat mask = maskPyramid.empty() ? Mat() : maskPyramid(layerInfo[level]);
 
@@ -710,12 +724,13 @@ static void computeKeyPoints(const Mat& imagePyramid,
         return;
     }
     Mat responses;
-    UMat ukeypoints, uresponses(1, nkeypoints, CV_32F);
 
     // Select best features using the Harris cornerness (better scoring than FAST)
     if( scoreType == DAFT_Impl::HARRIS_SCORE )
     {
-        HarrisResponses(imagePyramid, layerInfo, allKeypoints, 7, HARRIS_K);
+        Mat eig(allKeypoints.size(), 4, CV_32F);
+        cout << "eig.size: " << eig.size() << "\n";
+        HarrisResponses(imagePyramid, layerInfo, allKeypoints, eig, 7, HARRIS_K);
 
         std::vector<KeyPoint> newAllKeypoints;
         newAllKeypoints.reserve(nfeaturesPerLevel[0]*nlevels);

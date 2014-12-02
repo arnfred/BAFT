@@ -26,14 +26,26 @@ set(SRCS
   ./src/utils.cpp
 )
 # ============================================================================ #
-# ORB tests
+# DAFT tests
 add_executable(
   test_daft
   test_daft.cpp
   ${SRCS}
 )
 
+# DAFT match tests
+add_executable(
+  test_daft_match
+  test_daft_match.cpp
+  ${SRCS}
+)
+
 target_link_libraries(
   test_daft
+  ${OpenCV_LIBS}
+)
+
+target_link_libraries(
+  test_daft_match
   ${OpenCV_LIBS}
 )
