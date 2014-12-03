@@ -62,52 +62,106 @@ const float HARRIS_K = 0.04f;
  * Function that computes the Harris responses in a
  * blockSize x blockSize patch at given points in the image
  */
+//static void
+//HarrisResponses(const Mat& img,
+//                std::vector<KeyPoint>& pts, const Mat& eig, int blockSize, float harris_k)
+//{
+//    CV_Assert( img.type() == CV_8UC1 && blockSize*blockSize <= 2048 );
+//
+//    size_t ptidx, ptsize = pts.size();
+//    float scale = 1.f/((1 << 2) * blockSize * 255.f);
+//    float scale_sq_sq = scale * scale * scale * scale;
+//    int r = blockSize/2;
+//    Mat eig_vec(1, 2, CV_32F);
+//    Mat eig_val(2, 2, CV_32F);
+//    for( ptidx= 0; ptidx < ptsize; ptidx++ )
+//    {
+//        KeyPoint kp = pts[ptidx];
+//        int x = cvRound(kp.pt.x);
+//        int y = cvRound(kp.pt.y);
+//        // Cut out region of interest:
+//        Mat t;
+//        Mat ut = img(Range(y - r - 1, y + r + 2), Range(x - r - 1, x + r + 2));
+//        ut.convertTo(t, CV_32S);
+//        Mat dx = (t(Range(1, t.rows - 1), Range(2, t.cols)) -
+//                    t(Range(1, t.rows - 1), Range(0, t.cols - 2)));
+//        Mat dy = (t(Range(2, t.rows), Range(1, t.cols - 1)) -
+//                    t(Range(0, t.rows - 2), Range(1, t.cols - 1)));
+//        int a = sum(dx.mul(dx))[0];
+//        int b = sum(dy.mul(dy))[0];
+//        int c = sum(dx.mul(dy))[0];
+//
+//        // Find eigenvectors of estimated covariance matrix
+//        //Mat corr = (Mat_<float>(2, 2) << static_cast<float>(a), static_cast<float>(c),
+//        //                                 static_cast<float>(c), static_cast<float>(b));
+//        //eigen(corr, eig_vec, eig_val);
+//        //sqrt(eig_vec.t() / std::sqrt(eig_vec.at<float>(0)*eig_vec.at<float>(1)), eig_vec);
+//        //if (ptidx == 0) {
+//        //    cout << eig_vec << "\n";
+//        //}
+//        //eig_vec.copyTo(eig(Range(ptidx, ptidx+1), Range(0,2)));
+//        //eig_val.row(0).copyTo(eig(Range(ptidx, ptidx+1), Range(2,4)));
+//
+//        // Add HarrisResponse to keypoint
+//        kp.response = ((float)a * b - (float)c * c -
+//                               harris_k * ((float)a + b) * ((float)a + b))*scale_sq_sq;
+//    }
+//}
+
+/**
+ * Function that computes the Harris responses in a
+ * blockSize x blockSize patch at given points in the image
+ */
 static void
-HarrisResponses(const Mat& img,
-                std::vector<KeyPoint>& pts, const Mat& eig, int blockSize, float harris_k)
+HarrisResponses(const Mat& img, std::vector<KeyPoint>& pts,
+                Mat& eig, int blockSize, float harris_k)
 {
     CV_Assert( img.type() == CV_8UC1 && blockSize*blockSize <= 2048 );
 
     size_t ptidx, ptsize = pts.size();
+
+    const uchar* ptr00 = img.ptr<uchar>();
+    int step = (int)(img.step/img.elemSize1());
+    int r = blockSize/2;
+
     float scale = 1.f/((1 << 2) * blockSize * 255.f);
     float scale_sq_sq = scale * scale * scale * scale;
-    int r = blockSize/2;
-    Mat eig_vec(1, 2, CV_32F);
-    Mat eig_val(2, 2, CV_32F);
-    for( ptidx= 0; ptidx < ptsize; ptidx++ )
+
+    AutoBuffer<int> ofsbuf(blockSize*blockSize);
+    int* ofs = ofsbuf;
+    for( int i = 0; i < blockSize; i++ )
+        for( int j = 0; j < blockSize; j++ )
+            ofs[i*blockSize + j] = (int)(i*step + j);
+
+    for( ptidx = 0; ptidx < ptsize; ptidx++ )
     {
-        KeyPoint kp = pts[ptidx];
-        int x = cvRound(kp.pt.x);
-        int y = cvRound(kp.pt.y);
-        // Cut out region of interest:
-        Mat t;
-        Mat ut = img(Range(y - r - 1, y + r + 2), Range(x - r - 1, x + r + 2));
-        ut.convertTo(t, CV_32S);
-        Mat dx = (t(Range(1, t.rows - 1), Range(2, t.cols)) -
-                    t(Range(1, t.rows - 1), Range(0, t.cols - 2)));
-        Mat dy = (t(Range(2, t.rows), Range(1, t.cols - 1)) -
-                    t(Range(0, t.rows - 2), Range(1, t.cols - 1)));
-        int a = sum(dx.mul(dx))[0];
-        int b = sum(dy.mul(dy))[0];
-        int c = sum(dx.mul(dy))[0];
+        //int x0 = cvRound(pts[ptidx].pt.x);
+        //int y0 = cvRound(pts[ptidx].pt.y);
+        int x0 = (int)pts[ptidx].pt.x;
+        int y0 = (int)pts[ptidx].pt.y;
+        float xd = 1 - (pts[ptidx].pt.x - (float)x0);
+        float yd = 1 - (pts[ptidx].pt.y - (float)y0);
+        float xd_inv = 1 - xd;
+        float yd_inv = 1 - yd;
 
-        // Find eigenvectors of estimated covariance matrix
-        Mat corr = (Mat_<float>(2, 2) << static_cast<float>(a), static_cast<float>(c),
-                                         static_cast<float>(c), static_cast<float>(b));
-        eigen(corr, eig_vec, eig_val);
-        sqrt(eig_vec.t() / std::sqrt(eig_vec.at<float>(0)*eig_vec.at<float>(1)), eig_vec);
-        if (ptidx == 0) {
-            cout << eig_vec << "\n";
+        const uchar* ptr0 = ptr00 + (y0 - r)*step + x0 - r;
+        float a = 0, b = 0, c = 0;
+
+        for( int k = 0; k < blockSize*blockSize; k++ )
+        {
+            const uchar* ptr = ptr0 + ofs[k];
+            float Ix = ((ptr[0]*xd  + ptr[1]  + ptr[2]*xd_inv + ptr[-step+1]*yd + ptr[step+1]*yd_inv) -
+                        (ptr[-2]*xd + ptr[-1] + ptr[0]*xd_inv + ptr[-step-1]*yd + ptr[step-1]*yd_inv));
+            float Iy = ((ptr[0]*yd + ptr[step] + ptr[2*step]*yd_inv + ptr[step-1]*xd + ptr[step+1]*xd_inv) -
+                        (ptr[-2*step]*yd + ptr[-step] + ptr[0]*yd_inv + ptr[-step-1]*xd + ptr[-step+1]*xd_inv));
+            a += Ix*Ix;
+            b += Iy*Iy;
+            c += Ix*Iy;
         }
-        eig_vec.copyTo(eig(Range(ptidx, ptidx+1), Range(0,2)));
-        eig_val.row(0).copyTo(eig(Range(ptidx, ptidx+1), Range(2,4)));
-
-        // Add HarrisResponse to keypoint
-        kp.response = ((float)a * b - (float)c * c -
-                               harris_k * ((float)a + b) * ((float)a + b))*scale_sq_sq;
+        pts[ptidx].response = (a * b - c * c -
+                               harris_k * (a + b) * (a + b))*scale_sq_sq;
     }
 }
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static void
