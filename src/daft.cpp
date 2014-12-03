@@ -114,11 +114,12 @@ const float HARRIS_K = 0.04f;
  */
 static void
 HarrisResponses(const Mat& img, std::vector<KeyPoint>& pts,
-                Mat& eig, int blockSize, float harris_k)
+                Mat& response, int blockSize, float harris_k)
 {
     CV_Assert( img.type() == CV_8UC1 && blockSize*blockSize <= 2048 );
 
     size_t ptidx, ptsize = pts.size();
+    cout << "size: " << ptsize << "\n";
 
     const uchar* ptr00 = img.ptr<uchar>();
     int step = (int)(img.step/img.elemSize1());
@@ -135,8 +136,6 @@ HarrisResponses(const Mat& img, std::vector<KeyPoint>& pts,
 
     for( ptidx = 0; ptidx < ptsize; ptidx++ )
     {
-        //int x0 = cvRound(pts[ptidx].pt.x);
-        //int y0 = cvRound(pts[ptidx].pt.y);
         int x0 = (int)pts[ptidx].pt.x;
         int y0 = (int)pts[ptidx].pt.y;
         float xd = 1 - (pts[ptidx].pt.x - (float)x0);
@@ -158,8 +157,12 @@ HarrisResponses(const Mat& img, std::vector<KeyPoint>& pts,
             b += Iy*Iy;
             c += Ix*Iy;
         }
+        response.at<float>(ptidx,0) = a;
+        response.at<float>(ptidx,1) = b;
+        response.at<float>(ptidx,2) = c;
         pts[ptidx].response = (a * b - c * c -
                                harris_k * (a + b) * (a + b))*scale_sq_sq;
+        pts[ptidx].class_id = ptidx;
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -729,6 +732,11 @@ static void computeKeyPoints(const Mat& imagePyramid,
     std::vector<KeyPoint> keypoints;
     keypoints.reserve(nfeaturesPerLevel[0]*2);
 
+    Mat response(2*nfeatures, 3, CV_32F);
+    Mat cur_response(nfeatures, 3, CV_32F);
+    cout << "response.size: " << response.size() << "\n";
+    int responseOffset = 0;
+
     for( level = 0; level < nlevels; level++ )
     {
         int featuresNum = nfeaturesPerLevel[level];
@@ -746,18 +754,26 @@ static void computeKeyPoints(const Mat& imagePyramid,
         KeyPointsFilter::retainBest(keypoints, 2 * featuresNum);
 
         // Filter remaining points based on their Harris Response
-        Mat eig_squeeze(keypoints.size(), 4, CV_32F);
-        cout << "eig.size: " << eig_squeeze.size() << "\n";
-        HarrisResponses(img, keypoints, eig_squeeze, 7, HARRIS_K);
+        HarrisResponses(img, keypoints, cur_response, 7, HARRIS_K);
         KeyPointsFilter::retainBest(keypoints, featuresNum);
 
         nkeypoints = (int)keypoints.size();
+        int index, a, b, c;
         for( i = 0; i < nkeypoints; i++ )
         {
+            index = keypoints[i].class_id;
+            keypoints[i].class_id = 0;
             keypoints[i].octave = level;
             keypoints[i].size = patchSize*layerScale[level];
             keypoints[i].pt *= layerScale[level];
+            a = cur_response.at<float>(index, 0);
+            b = cur_response.at<float>(index, 1);
+            c = cur_response.at<float>(index, 2);
+            response.at<float>(i + responseOffset, 0) = a;
+            response.at<float>(i + responseOffset, 1) = b;
+            response.at<float>(i + responseOffset, 2) = c;
         }
+        responseOffset += nkeypoints;
 
         std::copy(keypoints.begin(), keypoints.end(), std::back_inserter(allKeypoints));
     }
