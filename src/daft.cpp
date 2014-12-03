@@ -63,7 +63,7 @@ const float HARRIS_K = 0.04f;
  * blockSize x blockSize patch at given points in the image
  */
 static void
-HarrisResponses(const Mat& img, const std::vector<Rect>& layerinfo,
+HarrisResponses(const Mat& img,
                 std::vector<KeyPoint>& pts, const Mat& eig, int blockSize, float harris_k)
 {
     CV_Assert( img.type() == CV_8UC1 && blockSize*blockSize <= 2048 );
@@ -77,9 +77,8 @@ HarrisResponses(const Mat& img, const std::vector<Rect>& layerinfo,
     for( ptidx= 0; ptidx < ptsize; ptidx++ )
     {
         KeyPoint kp = pts[ptidx];
-        int z = kp.octave;
-        int x = cvRound(kp.pt.x) + layerinfo[z].x;
-        int y = cvRound(kp.pt.y) + layerinfo[z].y;
+        int x = cvRound(kp.pt.x);
+        int y = cvRound(kp.pt.y);
         // Cut out region of interest:
         Mat t;
         Mat ut = img(Range(y - r - 1, y + r + 2), Range(x - r - 1, x + r + 2));
@@ -628,6 +627,33 @@ int DAFT_Impl::defaultNorm() const
 }
 
 
+/** Compute the amount of features for each level of the image pyramid
+ * @param nlevels the number of levels in the image pyramid
+ * @param nfeatures the total number of features
+ * @param scaleFactor the scale difference between two adjacent levels
+ */
+static std::vector<int> featuresPerLevel(int nlevels,
+                                         int nfeatures,
+                                         float scaleFactor)
+{
+    std::vector<int> nfeaturesPerLevel(nlevels);
+
+    // fill the extractors and descriptors for the corresponding scales
+    float factor = (float)(1.0 / scaleFactor);
+    float ndesiredFeaturesPerScale = nfeatures*(1 - factor)/(1 - (float)std::pow((double)factor, (double)nlevels));
+
+    int sumFeatures = 0, level;
+    for( level = 0; level < nlevels-1; level++ )
+    {
+        nfeaturesPerLevel[level] = cvRound(ndesiredFeaturesPerScale);
+        sumFeatures += nfeaturesPerLevel[level];
+        ndesiredFeaturesPerScale *= factor;
+    }
+    nfeaturesPerLevel[nlevels-1] = std::max(nfeatures - sumFeatures, 0);
+    return nfeaturesPerLevel;
+}
+
+
 /** Compute the DAFT_Impl keypoints on an image
  * @param image_pyramid the image pyramid to compute the features and descriptors on
  * @param mask_pyramid the masks to apply at every level
@@ -643,125 +669,43 @@ static void computeKeyPoints(const Mat& imagePyramid,
                              int fastThreshold  )
 {
     int i, nkeypoints, level, nlevels = (int)layerInfo.size();
-    std::vector<int> nfeaturesPerLevel(nlevels);
-
-    // fill the extractors and descriptors for the corresponding scales
-    float factor = (float)(1.0 / scaleFactor);
-    float ndesiredFeaturesPerScale = nfeatures*(1 - factor)/(1 - (float)std::pow((double)factor, (double)nlevels));
-
-    int sumFeatures = 0;
-    for( level = 0; level < nlevels-1; level++ )
-    {
-        nfeaturesPerLevel[level] = cvRound(ndesiredFeaturesPerScale);
-        sumFeatures += nfeaturesPerLevel[level];
-        ndesiredFeaturesPerScale *= factor;
-    }
-    nfeaturesPerLevel[nlevels-1] = std::max(nfeatures - sumFeatures, 0);
-
-    // Make sure we forget about what is too close to the boundary
-    //edge_threshold_ = std::max(edge_threshold_, patch_size_/2 + kKernelWidth / 2 + 2);
-
-    // pre-compute the end of a row in a circular patch
-    int halfPatchSize = patchSize / 2;
-    std::vector<int> umax(halfPatchSize + 2);
-
-    int v, v0, vmax = cvFloor(halfPatchSize * std::sqrt(2.f) / 2 + 1);
-    int vmin = cvCeil(halfPatchSize * std::sqrt(2.f) / 2);
-    for (v = 0; v <= vmax; ++v)
-        umax[v] = cvRound(std::sqrt((double)halfPatchSize * halfPatchSize - v * v));
-
-    // Make sure we are symmetric
-    for (v = halfPatchSize, v0 = 0; v >= vmin; --v)
-    {
-        while (umax[v0] == umax[v0 + 1])
-            ++v0;
-        umax[v] = v0;
-        ++v0;
-    }
+    std::vector<int> nfeaturesPerLevel = featuresPerLevel(nlevels, nfeatures, scaleFactor);
 
     allKeypoints.clear();
     std::vector<KeyPoint> keypoints;
-    std::vector<int> counters(nlevels);
     keypoints.reserve(nfeaturesPerLevel[0]*2);
 
     for( level = 0; level < nlevels; level++ )
     {
         int featuresNum = nfeaturesPerLevel[level];
-        cout << "Layerinfo: " << layerInfo[level] << "\n";
         Mat img = imagePyramid(layerInfo[level]);
         Mat mask = maskPyramid.empty() ? Mat() : maskPyramid(layerInfo[level]);
 
         // Detect FAST features, 20 is a good threshold
-        {
         Ptr<FastFeatureDetector> fd = FastFeatureDetector::create(fastThreshold, true);
         fd->detect(img, keypoints, mask);
-        }
 
         // Remove keypoints very close to the border
         KeyPointsFilter::runByImageBorder(keypoints, img.size(), edgeThreshold);
 
         // Keep more points than necessary as FAST does not give amazing corners
-        KeyPointsFilter::retainBest(keypoints, scoreType == DAFT_Impl::HARRIS_SCORE ? 2 * featuresNum : featuresNum);
+        KeyPointsFilter::retainBest(keypoints, 2 * featuresNum);
+
+        // Filter remaining points based on their Harris Response
+        Mat eig_squeeze(keypoints.size(), 4, CV_32F);
+        cout << "eig.size: " << eig_squeeze.size() << "\n";
+        HarrisResponses(img, keypoints, eig_squeeze, 7, HARRIS_K);
+        KeyPointsFilter::retainBest(keypoints, featuresNum);
 
         nkeypoints = (int)keypoints.size();
-        counters[level] = nkeypoints;
-
-        float sf = layerScale[level];
         for( i = 0; i < nkeypoints; i++ )
         {
             keypoints[i].octave = level;
-            keypoints[i].size = patchSize*sf;
+            keypoints[i].size = patchSize*layerScale[level];
+            keypoints[i].pt *= layerScale[level];
         }
 
         std::copy(keypoints.begin(), keypoints.end(), std::back_inserter(allKeypoints));
-    }
-
-    std::vector<Vec3i> ukeypoints_buf;
-
-    nkeypoints = (int)allKeypoints.size();
-    if(nkeypoints == 0)
-    {
-        return;
-    }
-    Mat responses;
-
-    // Select best features using the Harris cornerness (better scoring than FAST)
-    if( scoreType == DAFT_Impl::HARRIS_SCORE )
-    {
-        Mat eig(allKeypoints.size(), 4, CV_32F);
-        cout << "eig.size: " << eig.size() << "\n";
-        HarrisResponses(imagePyramid, layerInfo, allKeypoints, eig, 7, HARRIS_K);
-
-        std::vector<KeyPoint> newAllKeypoints;
-        newAllKeypoints.reserve(nfeaturesPerLevel[0]*nlevels);
-
-        int offset = 0;
-        for( level = 0; level < nlevels; level++ )
-        {
-            int featuresNum = nfeaturesPerLevel[level];
-            nkeypoints = counters[level];
-            keypoints.resize(nkeypoints);
-            std::copy(allKeypoints.begin() + offset,
-                      allKeypoints.begin() + offset + nkeypoints,
-                      keypoints.begin());
-            offset += nkeypoints;
-
-            //cull to the final desired level, using the new Harris scores.
-            KeyPointsFilter::retainBest(keypoints, featuresNum);
-
-            std::copy(keypoints.begin(), keypoints.end(), std::back_inserter(newAllKeypoints));
-        }
-        std::swap(allKeypoints, newAllKeypoints);
-    }
-
-    nkeypoints = (int)allKeypoints.size();
-
-    //ICAngles(imagePyramid, layerInfo, allKeypoints, umax, halfPatchSize);
-
-    for( i = 0; i < nkeypoints; i++ )
-    {
-        float scale = layerScale[allKeypoints[i].octave];
-        allKeypoints[i].pt *= scale;
     }
 }
 
@@ -790,6 +734,7 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     const int HARRIS_BLOCK_SIZE = 9;
     int halfPatchSize = patchSize / 2;
     int border = std::max(edgeThreshold, std::max(halfPatchSize, HARRIS_BLOCK_SIZE/2))+1;
+    cout << "border: " << border << "\n";
 
     Mat image = _image.getMat(), mask = _mask.getMat();
     if( image.type() != CV_8UC1 )
