@@ -12,7 +12,7 @@ public:
     enum { kBytes = 32, HARRIS_SCORE=0, FAST_SCORE=1 };
 
     CV_WRAP static Ptr<DAFT> create(int nfeatures=500, float scaleFactor=1.2f, int nlevels=8, int edgeThreshold=31,
-        int firstLevel=0, int WTA_K=2, int scoreType=DAFT::HARRIS_SCORE, int patchSize=31, int fastThreshold=20);
+        int WTA_K=2, int scoreType=DAFT::HARRIS_SCORE, int patchSize=31, int fastThreshold=20);
 
     CV_WRAP virtual void setMaxFeatures(int maxFeatures) = 0;
     CV_WRAP virtual int getMaxFeatures() const = 0;
@@ -25,9 +25,6 @@ public:
 
     CV_WRAP virtual void setEdgeThreshold(int edgeThreshold) = 0;
     CV_WRAP virtual int getEdgeThreshold() const = 0;
-
-    CV_WRAP virtual void setFirstLevel(int firstLevel) = 0;
-    CV_WRAP virtual int getFirstLevel() const = 0;
 
     CV_WRAP virtual void setWTA_K(int wta_k) = 0;
     CV_WRAP virtual int getWTA_K() const = 0;
