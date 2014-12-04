@@ -711,137 +711,16 @@ static std::vector<int> featuresPerLevel(int nlevels,
 }
 
 
-/** Compute the DAFT_Impl keypoints on an image
- * @param image_pyramid the image pyramid to compute the features and descriptors on
- * @param mask_pyramid the masks to apply at every level
- * @param keypoints the resulting keypoints, clustered per level
- */
-static void computeKeyPoints(const Mat& imagePyramid,
-                             const Mat& maskPyramid,
-                             const std::vector<Rect>& layerInfo,
-                             const std::vector<float>& layerScale,
-                             std::vector<KeyPoint>& allKeypoints,
-                             int nfeatures, double scaleFactor,
-                             int edgeThreshold, int patchSize, int scoreType,
-                             int fastThreshold  )
+// Compute the offsets and sizes of each image layer in the
+// image pyramid. Return the total size of the image pyramid buffer
+static Size computeLayerInfo(const Mat& image,
+                             int border, double scaleFactor,
+                             int nLevels, int firstLevel,
+                             std::vector<Rect>& layerInfo,
+                             std::vector<int>& layerOfs,
+                             std::vector<float>& layerScale)
 {
-    int i, nkeypoints, level, nlevels = (int)layerInfo.size();
-    std::vector<int> nfeaturesPerLevel = featuresPerLevel(nlevels, nfeatures, scaleFactor);
-
-    allKeypoints.clear();
-    std::vector<KeyPoint> keypoints;
-    keypoints.reserve(nfeaturesPerLevel[0]*2);
-
-    Mat response(2*nfeatures, 3, CV_32F);
-    Mat cur_response(nfeatures, 3, CV_32F);
-    cout << "response.size: " << response.size() << "\n";
-    int responseOffset = 0;
-
-    for( level = 0; level < nlevels; level++ )
-    {
-        int featuresNum = nfeaturesPerLevel[level];
-        Mat img = imagePyramid(layerInfo[level]);
-        Mat mask = maskPyramid.empty() ? Mat() : maskPyramid(layerInfo[level]);
-
-        // Detect FAST features, 20 is a good threshold
-        Ptr<FastFeatureDetector> fd = FastFeatureDetector::create(fastThreshold, true);
-        fd->detect(img, keypoints, mask);
-
-        // Remove keypoints very close to the border
-        KeyPointsFilter::runByImageBorder(keypoints, img.size(), edgeThreshold);
-
-        // Keep more points than necessary as FAST does not give amazing corners
-        KeyPointsFilter::retainBest(keypoints, 2 * featuresNum);
-
-        // Filter remaining points based on their Harris Response
-        HarrisResponses(img, keypoints, cur_response, 7, HARRIS_K);
-        KeyPointsFilter::retainBest(keypoints, featuresNum);
-
-        nkeypoints = (int)keypoints.size();
-        int index, a, b, c;
-        for( i = 0; i < nkeypoints; i++ )
-        {
-            index = keypoints[i].class_id;
-            keypoints[i].class_id = 0;
-            keypoints[i].octave = level;
-            keypoints[i].size = patchSize*layerScale[level];
-            keypoints[i].pt *= layerScale[level];
-            a = cur_response.at<float>(index, 0);
-            b = cur_response.at<float>(index, 1);
-            c = cur_response.at<float>(index, 2);
-            response.at<float>(i + responseOffset, 0) = a;
-            response.at<float>(i + responseOffset, 1) = b;
-            response.at<float>(i + responseOffset, 2) = c;
-        }
-        responseOffset += nkeypoints;
-
-        std::copy(keypoints.begin(), keypoints.end(), std::back_inserter(allKeypoints));
-    }
-}
-
-
-/** Compute the DAFT_Impl features and descriptors on an image
- * @param img the image to compute the features and descriptors on
- * @param mask the mask to apply
- * @param keypoints the resulting keypoints
- * @param descriptors the resulting descriptors
- * @param do_keypoints if true, the keypoints are computed, otherwise used as an input
- * @param do_descriptors if true, also computes the descriptors
- */
-void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
-                                 std::vector<KeyPoint>& keypoints,
-                                 OutputArray _descriptors, bool useProvidedKeypoints )
-{
-    CV_Assert(patchSize >= 2);
-
-    bool do_keypoints = !useProvidedKeypoints;
-    bool do_descriptors = _descriptors.needed();
-
-    if( (!do_keypoints && !do_descriptors) || _image.empty() )
-        return;
-
-    //ROI handling
-    const int HARRIS_BLOCK_SIZE = 9;
-    int halfPatchSize = patchSize / 2;
-    int border = std::max(edgeThreshold, std::max(halfPatchSize, HARRIS_BLOCK_SIZE/2))+1;
-    cout << "border: " << border << "\n";
-
-    Mat image = _image.getMat(), mask = _mask.getMat();
-    if( image.type() != CV_8UC1 )
-        cvtColor(_image, image, COLOR_BGR2GRAY);
-
-    int i, level, nLevels = this->nlevels, nkeypoints = (int)keypoints.size();
-    bool sortedByLevel = true;
-
-    if( !do_keypoints )
-    {
-        // if we have pre-computed keypoints, they may use more levels than it is set in parameters
-        // !!!TODO!!! implement more correct method, independent from the used keypoint detector.
-        // Namely, the detector should provide correct size of each keypoint. Based on the keypoint size
-        // and the algorithm used (i.e. BRIEF, running on 31x31 patches) we should compute the approximate
-        // scale-factor that we need to apply. Then we should cluster all the computed scale-factors and
-        // for each cluster compute the corresponding image.
-        //
-        // In short, ultimately the descriptor should
-        // ignore octave parameter and deal only with the keypoint size.
-        nLevels = 0;
-        for( i = 0; i < nkeypoints; i++ )
-        {
-            level = keypoints[i].octave;
-            CV_Assert(level >= 0);
-            if( i > 0 && level < keypoints[i-1].octave )
-                sortedByLevel = false;
-            nLevels = std::max(nLevels, level);
-        }
-        nLevels++;
-    }
-
-    std::vector<Rect> layerInfo(nLevels);
-    std::vector<int> layerOfs(nLevels);
-    std::vector<float> layerScale(nLevels);
-    Mat imagePyramid, maskPyramid;
-
-    int level_dy = image.rows + border*2;
+    int level_dy = image.rows + border*2, level;
     Point level_ofs(0,0);
     Size bufSize((image.cols + border*2 + 15) & -16, 0);
 
@@ -863,14 +742,29 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         level_ofs.x += wholeSize.width;
     }
     bufSize.height = level_ofs.y + level_dy;
+    return bufSize;
+}
 
-    imagePyramid.create(bufSize, CV_8U);
-    if( !mask.empty() )
-        maskPyramid.create(bufSize, CV_8U);
+// Compute the image pyramid by laying the resized images next to each other in
+// image pyramid buffer starting from largest image in the top to the smallest
+// image in the bottom. If two images fit on a row they are put next to each
+// other
+static void computeImagePyramid(const Mat& image,
+                                int border,
+                                int nLevels, int firstLevel,
+                                std::vector<Rect> layerInfo,
+                                std::vector<int> layerOfs,
+                                std::vector<float> layerScale,
+                                Mat& imagePyramid, Mat& mask,
+                                Mat& maskPyramid)
+{
+
+
 
     Mat prevImg = image, prevMask = mask;
 
     // Pre-compute the scale pyramids
+    int level;
     for (level = 0; level < nLevels; ++level)
     {
         Rect linfo = layerInfo[level];
@@ -914,6 +808,150 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         prevImg = currImg;
         prevMask = currMask;
     }
+}
+
+
+/** Compute the DAFT_Impl keypoints on an image
+ * @param image_pyramid the image pyramid to compute the features and descriptors on
+ * @param mask_pyramid the masks to apply at every level
+ * @param keypoints the resulting keypoints, clustered per level
+ */
+static void computeKeyPoints(const Mat& imagePyramid,
+                             const Mat& maskPyramid,
+                             const std::vector<Rect>& layerInfo,
+                             const std::vector<float>& layerScale,
+                             std::vector<KeyPoint>& allKeypoints,
+                             int nfeatures, double scaleFactor,
+                             int edgeThreshold, int patchSize, int scoreType,
+                             int fastThreshold  )
+{
+    int i, nkeypoints, level, nlevels = (int)layerInfo.size();
+    std::vector<int> nfeaturesPerLevel = featuresPerLevel(nlevels, nfeatures, scaleFactor);
+
+    allKeypoints.clear();
+    std::vector<KeyPoint> keypoints;
+    keypoints.reserve(nfeaturesPerLevel[0]*2);
+
+    Mat response(2*nfeatures, 3, CV_32F);
+    Mat cur_response(nfeatures, 3, CV_32F);
+    int responseOffset = 0;
+
+    for( level = 0; level < nlevels; level++ )
+    {
+        int featuresNum = nfeaturesPerLevel[level];
+        Mat img = imagePyramid(layerInfo[level]);
+        Mat mask = maskPyramid.empty() ? Mat() : maskPyramid(layerInfo[level]);
+
+        // Detect FAST features, 20 is a good threshold
+        Ptr<FastFeatureDetector> fd = FastFeatureDetector::create(fastThreshold, true);
+        fd->detect(img, keypoints, mask);
+
+        // Remove keypoints very close to the border
+        KeyPointsFilter::runByImageBorder(keypoints, img.size(), edgeThreshold);
+
+        // Keep more points than necessary as FAST does not give amazing corners
+        KeyPointsFilter::retainBest(keypoints, 2 * featuresNum);
+
+        // Filter remaining points based on their Harris Response
+        HarrisResponses(img, keypoints, cur_response, 7, HARRIS_K);
+        KeyPointsFilter::retainBest(keypoints, featuresNum);
+
+        nkeypoints = (int)keypoints.size();
+        int index;
+        for( i = 0; i < nkeypoints; i++ )
+        {
+            index = keypoints[i].class_id;
+            keypoints[i].class_id = 0;
+            keypoints[i].octave = level;
+            keypoints[i].size = patchSize*layerScale[level];
+            keypoints[i].pt *= layerScale[level];
+            response.at<float>(i + responseOffset, 0) = cur_response.at<float>(index, 0);
+            response.at<float>(i + responseOffset, 1) = cur_response.at<float>(index, 1);
+            response.at<float>(i + responseOffset, 2) = cur_response.at<float>(index, 2);
+        }
+        responseOffset += nkeypoints;
+
+        std::copy(keypoints.begin(), keypoints.end(), std::back_inserter(allKeypoints));
+    }
+}
+
+
+/** Compute the DAFT_Impl features and descriptors on an image
+ * @param img the image to compute the features and descriptors on
+ * @param mask the mask to apply
+ * @param keypoints the resulting keypoints
+ * @param descriptors the resulting descriptors
+ * @param do_keypoints if true, the keypoints are computed, otherwise used as an input
+ * @param do_descriptors if true, also computes the descriptors
+ */
+void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
+                                 std::vector<KeyPoint>& keypoints,
+                                 OutputArray _descriptors, bool useProvidedKeypoints )
+{
+    CV_Assert(patchSize >= 2);
+
+    bool do_keypoints = !useProvidedKeypoints;
+    bool do_descriptors = _descriptors.needed();
+
+    if( (!do_keypoints && !do_descriptors) || _image.empty() )
+        return;
+
+    //ROI handling. TODO: this will change with new descriptor
+    const int HARRIS_BLOCK_SIZE = 9;
+    int halfPatchSize = patchSize / 2;
+    int border = std::max(edgeThreshold, std::max(halfPatchSize, HARRIS_BLOCK_SIZE/2))+1;
+    cout << "border: " << border << "\n";
+
+    Mat image = _image.getMat(), mask = _mask.getMat();
+    if( image.type() != CV_8UC1 )
+        cvtColor(_image, image, COLOR_BGR2GRAY);
+    // TODO: use only green channel
+
+    int i, level, nLevels = this->nlevels, nkeypoints = (int)keypoints.size();
+    bool sortedByLevel = true;
+
+    if( !do_keypoints )
+    {
+
+        // if we have pre-computed keypoints, they may use more levels than it
+        // is set in parameters !!!TODO!!! implement more correct method,
+        // independent from the used keypoint detector. Namely, the detector
+        // should provide correct size of each keypoint. Based on the keypoint
+        // size and the algorithm used (i.e. BRIEF, running on 31x31 patches)
+        // we should compute the approximate scale-factor that we need to
+        // apply. Then we should cluster all the computed scale-factors and for
+        // each cluster compute the corresponding image.
+        //
+        // In short, ultimately the descriptor should ignore octave parameter
+        // and deal only with the keypoint size.
+        nLevels = 0;
+        for( i = 0; i < nkeypoints; i++ )
+        {
+            level = keypoints[i].octave;
+            CV_Assert(level >= 0);
+            if( i > 0 && level < keypoints[i-1].octave )
+                sortedByLevel = false;
+            nLevels = std::max(nLevels, level);
+        }
+        nLevels++;
+    }
+
+    // Compute the different aspects of the layers in the image pyramid
+    std::vector<Rect> layerInfo(nLevels);
+    std::vector<int> layerOfs(nLevels);
+    std::vector<float> layerScale(nLevels);
+    Mat imagePyramid, maskPyramid;
+    Size bufSize = computeLayerInfo(image, border, scaleFactor, nLevels,
+                                     firstLevel, layerInfo, layerOfs, layerScale);
+
+    // Allocate space for image pyramid
+    imagePyramid.create(bufSize, CV_8U);
+    if( !mask.empty() )
+        maskPyramid.create(bufSize, CV_8U);
+
+    // create image pyramid
+    computeImagePyramid(image, border, nLevels, firstLevel, layerInfo,
+                        layerOfs, layerScale, imagePyramid, mask, maskPyramid);
 
 
     if( do_keypoints )
