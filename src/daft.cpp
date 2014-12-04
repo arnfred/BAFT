@@ -821,6 +821,7 @@ static void computeKeyPoints(const Mat& imagePyramid,
                              const std::vector<Rect>& layerInfo,
                              const std::vector<float>& layerScale,
                              std::vector<KeyPoint>& allKeypoints,
+                             Mat& response,
                              int nfeatures, double scaleFactor,
                              int edgeThreshold, int patchSize, int scoreType,
                              int fastThreshold  )
@@ -832,7 +833,6 @@ static void computeKeyPoints(const Mat& imagePyramid,
     std::vector<KeyPoint> keypoints;
     keypoints.reserve(nfeaturesPerLevel[0]*2);
 
-    Mat response(2*nfeatures, 3, CV_32F);
     Mat cur_response(nfeatures, 3, CV_32F);
     int responseOffset = 0;
 
@@ -958,8 +958,9 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     {
 
         // Get keypoints, those will be far enough from the border that no check will be required for the descriptor
+        Mat harrisResponse(nfeatures, 3, CV_32F);
         computeKeyPoints(imagePyramid, maskPyramid,
-                         layerInfo, layerScale, keypoints,
+                         layerInfo, layerScale, keypoints, harrisResponse,
                          nfeatures, scaleFactor, edgeThreshold, patchSize, scoreType, fastThreshold);
     }
     else
