@@ -66,10 +66,9 @@ HarrisResponses(const Mat& img, std::vector<KeyPoint>& pts,
     CV_Assert( img.type() == CV_8UC1 && blockSize*blockSize <= 2048 );
 
     size_t ptidx, ptsize = pts.size();
-    cout << "size: " << ptsize << "\n";
 
     const uchar* ptr00 = img.ptr<uchar>();
-    int step = (int)(img.step/img.elemSize1());
+    int step = img.step1();
     int r = blockSize/2;
 
     float scale = 1.f/((1 << 2) * blockSize * 255.f);
@@ -113,6 +112,20 @@ HarrisResponses(const Mat& img, std::vector<KeyPoint>& pts,
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static inline float pick( const Mat& img, float x, float y )
+{
+    int x0 = (int)x;
+    int y0 = (int)y;
+    float xd = 1 - (x - (float)x0);
+    float yd = 1 - (y - (float)y0);
+    int step = img.step1();
+    const uchar* ptr = img.ptr<uchar>() + y0*step + x0;
+    float xd_inv = 1 - xd;
+    float yd_inv = 1 - yd;
+    return ptr[-1]*xd + ptr[0] + ptr[1]*xd_inv + ptr[-step]*yd + ptr[step]*yd_inv;
+}
 
 static void
 computeSkew( const Mat& responses, Mat& skew, int nkeypoints )
@@ -172,7 +185,7 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
                        Mat& descriptors, int dsize, int patchSize )
 {
     // Compute skew matrix for each keypoint
-    int j, i, p_idx, k, min_p, max_p, nkeypoints = (int)keypoints.size();
+    int nkeypoints = (int)keypoints.size();
     Mat skew(nkeypoints, 4, CV_32F), points_kp, s, img_roi;
     computeSkew(harrisResponse, skew, nkeypoints);
 
@@ -184,38 +197,62 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
 
     // Now for each keypoint, collect data for each point and construct the descriptor
     KeyPoint kp;
-    for (i = 0; i < nkeypoints; i++)
+    for (int i = 0; i < nkeypoints; i++)
     {
         // Prepare points
         s = skew(Range(i,i+1), Range::all()).reshape(0, 2);
-        points_kp = points*s; // (s.t()*points.t()).t() = points*s
+        points_kp = (points*s); // (s.t()*points.t()).t() = points*s
+        points_kp = points_kp.reshape(0,dsize); // 16 numbers per row
         // Find image region of interest in image pyramid
         kp = keypoints[i];
+        int x = kp.pt.x / layerScale[kp.octave];
+        int y = kp.pt.y / layerScale[kp.octave];
         img_roi = imagePyramid(layerInfo[kp.octave]); // TODO: this can break for unsupported keypoints
-
-        for (j = 0, p_idx = 0; j < dsize; j++, p_idx +=8)
-        {
-            // Construct the byte we put in the descriptor at position `j`
-            // it consists of two 4 bit numbers, each consisting of two 2 bit numbers
-
-        }
-        // Let's see the result
-        //if (i == 0)
-        //{
-        //    cout << "skew:\n" << s << "\n\n";
-        //    cout << "points:\n" << points(Range(0,4),Range::all()) << "\n\n";
-        //    cout << "points_kp:\n" << points_kp(Range(0,4), Range::all()) << "\n\n";
-        //}
-    }
-
-
-    // Fill descriptor with zeros
-    for (i = 0; i < nkeypoints; i++)
-    {
         uchar* desc = descriptors.ptr<uchar>(i);
-        for (j = 0; j < dsize; j++)
+
+        for (int j = 0, p_idx = 0; j < dsize; j++, p_idx +=8)
         {
-            desc[j] = (uchar)0;
+            const float* row = points_kp.ptr<float>(j);
+
+            // Find max and min for the points picked
+            float min_val = 999, max_val = 0, picked = 0;
+            int min_idx = 0, max_idx = 0;
+            for (int k = 0; k < 4; k++)
+            {
+                float x0 = row[2*k] + x;
+                float y0 = row[2*k+1] + y;
+                picked = pick(img_roi, x0, y0);
+                if (picked < min_val)
+                {
+                    min_idx = k;
+                    min_val = picked;
+                }
+                else if (picked > max_val)
+                {
+                    max_idx = k;
+                    max_val = picked;
+                }
+            }
+            int byte_val = (max_idx + (min_idx << 2));
+            min_val = 999; max_val = 0; // Reset
+            for (int k = 4; k < 8; k++)
+            {
+                float x0 = row[2*k] + x;
+                float y0 = row[2*k+1] + y;
+                picked = pick(img_roi, x0, y0);
+                if (picked < min_val)
+                {
+                    min_idx = k - 4;
+                    min_val = picked;
+                }
+                else if (picked > max_val)
+                {
+                    max_idx = k - 4;
+                    max_val = picked;
+                }
+            }
+            byte_val = (byte_val << 4) + (max_idx + (min_idx << 2));
+            desc[j] = (uchar)byte_val;
         }
     }
 }
