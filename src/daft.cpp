@@ -55,59 +55,6 @@ using namespace cv;
 const float HARRIS_K = 0.04f;
 
 
-
-
-
-/**
- * Function that computes the Harris responses in a
- * blockSize x blockSize patch at given points in the image
- */
-//static void
-//HarrisResponses(const Mat& img,
-//                std::vector<KeyPoint>& pts, const Mat& eig, int blockSize, float harris_k)
-//{
-//    CV_Assert( img.type() == CV_8UC1 && blockSize*blockSize <= 2048 );
-//
-//    size_t ptidx, ptsize = pts.size();
-//    float scale = 1.f/((1 << 2) * blockSize * 255.f);
-//    float scale_sq_sq = scale * scale * scale * scale;
-//    int r = blockSize/2;
-//    Mat eig_vec(1, 2, CV_32F);
-//    Mat eig_val(2, 2, CV_32F);
-//    for( ptidx= 0; ptidx < ptsize; ptidx++ )
-//    {
-//        KeyPoint kp = pts[ptidx];
-//        int x = cvRound(kp.pt.x);
-//        int y = cvRound(kp.pt.y);
-//        // Cut out region of interest:
-//        Mat t;
-//        Mat ut = img(Range(y - r - 1, y + r + 2), Range(x - r - 1, x + r + 2));
-//        ut.convertTo(t, CV_32S);
-//        Mat dx = (t(Range(1, t.rows - 1), Range(2, t.cols)) -
-//                    t(Range(1, t.rows - 1), Range(0, t.cols - 2)));
-//        Mat dy = (t(Range(2, t.rows), Range(1, t.cols - 1)) -
-//                    t(Range(0, t.rows - 2), Range(1, t.cols - 1)));
-//        int a = sum(dx.mul(dx))[0];
-//        int b = sum(dy.mul(dy))[0];
-//        int c = sum(dx.mul(dy))[0];
-//
-//        // Find eigenvectors of estimated covariance matrix
-//        //Mat corr = (Mat_<float>(2, 2) << static_cast<float>(a), static_cast<float>(c),
-//        //                                 static_cast<float>(c), static_cast<float>(b));
-//        //eigen(corr, eig_vec, eig_val);
-//        //sqrt(eig_vec.t() / std::sqrt(eig_vec.at<float>(0)*eig_vec.at<float>(1)), eig_vec);
-//        //if (ptidx == 0) {
-//        //    cout << eig_vec << "\n";
-//        //}
-//        //eig_vec.copyTo(eig(Range(ptidx, ptidx+1), Range(0,2)));
-//        //eig_val.row(0).copyTo(eig(Range(ptidx, ptidx+1), Range(2,4)));
-//
-//        // Add HarrisResponse to keypoint
-//        kp.response = ((float)a * b - (float)c * c -
-//                               harris_k * ((float)a + b) * ((float)a + b))*scale_sq_sq;
-//    }
-//}
-
 /**
  * Function that computes the Harris responses in a
  * blockSize x blockSize patch at given points in the image
@@ -180,22 +127,9 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints )
         corr.at<float>(0,1) = responses.at<float>(i,2);
         corr.at<float>(1,0) = responses.at<float>(i,2);
         corr.at<float>(1,1) = responses.at<float>(i,1);
-        if (i == 0)
-        {
-            corr.at<float>(0,0) = 1;
-            corr.at<float>(0,1) = -1;
-            corr.at<float>(1,0) = -1;
-            corr.at<float>(1,1) = 2;
-            cout << "corr:\n" << corr << "\n\n";
-        }
 
         // Find eigenvectors
         eigen(corr, eig_val, eig_vec);
-        if (i == 0)
-        {
-            cout << "Eig_vec:\n" << eig_vec << "\n\n";
-            cout << "Eig_val:\n" << eig_val << "\n\n";
-        }
         sqrt(eig_val.t() / std::sqrt(eig_val.at<float>(0)*eig_val.at<float>(1)), eig_val);
 
         // Build rotation and squeeze matrix
@@ -206,30 +140,74 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints )
         rotate.at<float>(1,0) = eig_vec.at<float>(0,0);
         rotate.at<float>(1,1) = eig_vec.at<float>(0,1);
 
-        // Insert product into skew
-        Mat skew_roi = skew(Range(i,i+1),Range::all()).reshape(0,2);
-        skew_roi = rotate * squeeze;
-        if (i == 0)
-        {
-            cout << "Eig_vec:\n" << eig_vec.row(0) << "\n\n";
-            cout << "Eig_val:\n" << eig_val << "\n\n";
-            cout << "Squeeze:\n" << squeeze << "\n\n";
-            cout << "Rotate:\n" << rotate << "\n\n";
-            cout << "Skew:  \n" << skew_roi << "\n\n";
-        }
+        // Insert product into return matrix
+        skew_roi = skew(Range(i,i+1),Range::all()).reshape(0,2);
+        skew_roi = (rotate * squeeze).t();
     }
+}
+
+static void generatePoints( Mat& points, int npoints, int patchSize )
+{
+    RNG rng(0x34985739);
+    float u;
+    for( int i = 0; i < npoints; i++ )
+    {
+        u = rng.uniform((float)-4.0, (float)4.0);
+        if (u >= 0)
+            points.at<float>(i,0) = exp(-1*u);
+        else
+            points.at<float>(i,0) = -1*exp(u);
+        u = rng.uniform((float)-4.0, (float)4.0);
+        if (u >= 0)
+            points.at<float>(i,1) = exp(-1*u);
+        else
+            points.at<float>(i,1) = -1*exp(u);
+    }
+    points *= patchSize;
 }
 
 static void
 computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerInfo,
                        const std::vector<float>& layerScale, const Mat& harrisResponse, std::vector<KeyPoint>& keypoints,
-                       Mat& descriptors, int dsize )
+                       Mat& descriptors, int dsize, int patchSize )
 {
     // Compute skew matrix for each keypoint
-    int j, i, nkeypoints = (int)keypoints.size();
-    Mat skew(nkeypoints, 4, CV_32F);
-    cout << keypoints[0].pt << "\n";
+    int j, i, p_idx, k, min_p, max_p, nkeypoints = (int)keypoints.size();
+    Mat skew(nkeypoints, 4, CV_32F), points_kp, s, img_roi;
     computeSkew(harrisResponse, skew, nkeypoints);
+
+    // Gather a set of points
+    // We need four points for every four bit element, which means eight per byte
+    int npoints = dsize*8;
+    Mat points(npoints, 2, CV_32F);
+    generatePoints(points, npoints, 8); // TODO: load fixed set of points instead of generating them
+
+    // Now for each keypoint, collect data for each point and construct the descriptor
+    KeyPoint kp;
+    for (i = 0; i < nkeypoints; i++)
+    {
+        // Prepare points
+        s = skew(Range(i,i+1), Range::all()).reshape(0, 2);
+        points_kp = points*s; // (s.t()*points.t()).t() = points*s
+        // Find image region of interest in image pyramid
+        kp = keypoints[i];
+        img_roi = imagePyramid(layerInfo[kp.octave]); // TODO: this can break for unsupported keypoints
+
+        for (j = 0, p_idx = 0; j < dsize; j++, p_idx +=8)
+        {
+            // Construct the byte we put in the descriptor at position `j`
+            // it consists of two 4 bit numbers, each consisting of two 2 bit numbers
+
+        }
+        // Let's see the result
+        //if (i == 0)
+        //{
+        //    cout << "skew:\n" << s << "\n\n";
+        //    cout << "points:\n" << points(Range(0,4),Range::all()) << "\n\n";
+        //    cout << "points_kp:\n" << points_kp(Range(0,4), Range::all()) << "\n\n";
+        //}
+    }
+
 
     // Fill descriptor with zeros
     for (i = 0; i < nkeypoints; i++)
@@ -395,14 +373,14 @@ static void computeImagePyramid(const Mat& image,
                                 Mat& imagePyramid, Mat& mask,
                                 Mat& maskPyramid)
 {
-
+    // Initialize values for level 0
     Mat prevImg     = image, prevMask = mask;
     Rect linfo      = layerInfo[0];
     Size sz         = Size(linfo.width, linfo.height);
     Rect wholeLinfo = Rect(linfo.x - border, linfo.y - border, sz.width + border*2, sz.height + border*2);
     Mat extImg      = imagePyramid(wholeLinfo), extMask;
 
-    // Pre-compute first level of the image pyramid
+    // Pre-compute level 0 of the image pyramid
     copyMakeBorder(image, extImg, border, border, border, border,
                    BORDER_REFLECT_101);
 
@@ -576,20 +554,15 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     Mat harrisResponse(nfeatures, 3, CV_32F);
     Size bufSize = computeLayerInfo(image, border, scaleFactor, nLevels,
                                      layerInfo, layerOfs, layerScale);
-
-    // Allocate space for image pyramid
+    // create image pyramid
     imagePyramid.create(bufSize, CV_8U);
     if( !mask.empty() )
         maskPyramid.create(bufSize, CV_8U);
-
-    // create image pyramid
     computeImagePyramid(image, border, nLevels, layerInfo,
                         layerOfs, layerScale, imagePyramid, mask, maskPyramid);
 
-
     if( do_keypoints )
     {
-
         // Get keypoints, those will be far enough from the border that no check will be required for the descriptor
         computeKeyPoints(imagePyramid, maskPyramid,
                          layerInfo, layerScale, keypoints, harrisResponse,
@@ -633,8 +606,7 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         // TODO check if blur helps
         Mat descriptors = _descriptors.getMat();
         computeDAFTDescriptors(imagePyramid, layerInfo, layerScale, harrisResponse,
-                               keypoints, descriptors, dsize);
-        cout.flush();
+                               keypoints, descriptors, dsize, patchSize);
 
         //const int npoints = 512;
         //Point patternbuf[npoints];
