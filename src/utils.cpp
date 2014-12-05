@@ -75,8 +75,8 @@ void matches2points_nndr(const std::vector<cv::KeyPoint>& train,
   float dist1 = 0.0, dist2 = 0.0;
   for (size_t i = 0; i < matches.size(); i++) {
     cv::DMatch dmatch = matches[i][0];
-    dist1 = matches[i][0].distance;
-    dist2 = matches[i][1].distance;
+    dist1 = (float)matches[i][0].distance;
+    dist2 = (float)matches[i][1].distance;
 
     if (dist1 < nndr*dist2) {
       pmatches.push_back(train[dmatch.queryIdx].pt);

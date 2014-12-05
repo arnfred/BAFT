@@ -143,7 +143,8 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints )
 
         // Find eigenvectors
         eigen(corr, eig_val, eig_vec);
-        sqrt(eig_val.t() / std::sqrt(eig_val.at<float>(0)*eig_val.at<float>(1)), eig_val);
+        eig_val = eig_val.t() / std::sqrt(eig_val.at<float>(0)*eig_val.at<float>(1));
+        //sqrt(eig_val.t() / std::sqrt(eig_val.at<float>(0)*eig_val.at<float>(1)), eig_val);
 
         // Build rotation and squeeze matrix
         squeeze.at<float>(0,0) = eig_val.at<float>(0);
@@ -161,7 +162,7 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints )
 
 static void generatePoints( Mat& points, int npoints, int patchSize )
 {
-    RNG rng(0x34985739);
+    RNG rng(0x34985730);
     float u;
     for( int i = 0; i < npoints; i++ )
     {
@@ -177,6 +178,7 @@ static void generatePoints( Mat& points, int npoints, int patchSize )
             points.at<float>(i,1) = -1*exp(u);
     }
     points *= patchSize;
+    //cout << "points:\n" << points << "\n\n";
 }
 
 static void
@@ -193,7 +195,7 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
     // We need four points for every four bit element, which means eight per byte
     int npoints = dsize*8;
     Mat points(npoints, 2, CV_32F);
-    generatePoints(points, npoints, 8); // TODO: load fixed set of points instead of generating them
+    generatePoints(points, npoints, 35); // TODO: load fixed set of points instead of generating them
 
     // Now for each keypoint, collect data for each point and construct the descriptor
     KeyPoint kp;
@@ -254,6 +256,7 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
             byte_val = (byte_val << 4) + (max_idx + (min_idx << 2));
             desc[j] = (uchar)byte_val;
         }
+        //cout << descriptors(Range(i,i+1), Range::all()) << "\n\n";
     }
 }
 
@@ -266,15 +269,17 @@ static inline float getScale(int level, double scaleFactor)
 class DAFT_Impl : public DAFT
 {
 public:
-    explicit DAFT_Impl(int _nfeatures, float _scaleFactor, int _nlevels, int _edgeThreshold,
-             int _WTA_K, int _scoreType, int _patchSize, int _fastThreshold) :
-        nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels),
-        edgeThreshold(_edgeThreshold), wta_k(_WTA_K),
-        scoreType(_scoreType), patchSize(_patchSize), fastThreshold(_fastThreshold)
+    explicit DAFT_Impl(int _nfeatures, int _size, float _scaleFactor, int _nlevels, int _edgeThreshold,
+             int _patchSize, int _fastThreshold) :
+        nfeatures(_nfeatures), size(_size), scaleFactor(_scaleFactor), nlevels(_nlevels),
+        edgeThreshold(_edgeThreshold), patchSize(_patchSize), fastThreshold(_fastThreshold)
     {}
 
     void setMaxFeatures(int maxFeatures) { nfeatures = maxFeatures; }
     int getMaxFeatures() const { return nfeatures; }
+
+    void setSize(int size_) { size = size_; }
+    int getSize() const { return size; }
 
     void setScaleFactor(double scaleFactor_) { scaleFactor = scaleFactor_; }
     double getScaleFactor() const { return scaleFactor; }
@@ -284,12 +289,6 @@ public:
 
     void setEdgeThreshold(int edgeThreshold_) { edgeThreshold = edgeThreshold_; }
     int getEdgeThreshold() const { return edgeThreshold; }
-
-    void setWTA_K(int wta_k_) { wta_k = wta_k_; }
-    int getWTA_K() const { return wta_k; }
-
-    void setScoreType(int scoreType_) { scoreType = scoreType_; }
-    int getScoreType() const { return scoreType; }
 
     void setPatchSize(int patchSize_) { patchSize = patchSize_; }
     int getPatchSize() const { return patchSize; }
@@ -311,18 +310,17 @@ public:
 protected:
 
     int nfeatures;
+    int size;
     double scaleFactor;
     int nlevels;
     int edgeThreshold;
-    int wta_k;
-    int scoreType;
     int patchSize;
     int fastThreshold;
 };
 
 int DAFT_Impl::descriptorSize() const
 {
-    return kBytes;
+    return size;
 }
 
 int DAFT_Impl::descriptorType() const
@@ -470,7 +468,7 @@ static void computeKeyPoints(const Mat& imagePyramid,
                              std::vector<KeyPoint>& allKeypoints,
                              Mat& response,
                              int nfeatures, double scaleFactor,
-                             int edgeThreshold, int patchSize, int scoreType,
+                             int edgeThreshold, int patchSize,
                              int fastThreshold  )
 {
     int i, nkeypoints, level, nlevels = (int)layerInfo.size();
@@ -603,7 +601,7 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         // Get keypoints, those will be far enough from the border that no check will be required for the descriptor
         computeKeyPoints(imagePyramid, maskPyramid,
                          layerInfo, layerScale, keypoints, harrisResponse,
-                         nfeatures, scaleFactor, edgeThreshold, patchSize, scoreType, fastThreshold);
+                         nfeatures, scaleFactor, edgeThreshold, patchSize, fastThreshold);
     }
     else
     {
@@ -640,7 +638,15 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         _descriptors.create(nkeypoints, dsize, CV_8U);
         std::vector<Point> pattern;
 
-        // TODO check if blur helps
+        for( level = 0; level < nLevels; level++ )
+        {
+            // preprocess the resized image
+            Mat workingMat = imagePyramid(layerInfo[level]);
+
+            //boxFilter(working_mat, working_mat, working_mat.depth(), Size(5,5), Point(-1,-1), true, BORDER_REFLECT_101);
+            GaussianBlur(workingMat, workingMat, Size(5, 5), 2, 2, BORDER_REFLECT_101);
+        }
+        // TODO check if blur helps (it currently makes things a little better)
         Mat descriptors = _descriptors.getMat();
         computeDAFTDescriptors(imagePyramid, layerInfo, layerScale, harrisResponse,
                                keypoints, descriptors, dsize, patchSize);
@@ -680,10 +686,10 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     }
 }
 
-Ptr<DAFT> DAFT::create(int nfeatures, float scaleFactor, int nlevels, int edgeThreshold,
-           int wta_k, int scoreType, int patchSize, int fastThreshold)
+Ptr<DAFT> DAFT::create(int nfeatures, int size, float scaleFactor, int nlevels, int edgeThreshold,
+         int patchSize, int fastThreshold)
 {
-    return makePtr<DAFT_Impl>(nfeatures, scaleFactor, nlevels, edgeThreshold,
-                              wta_k, scoreType, patchSize, fastThreshold);
+    return makePtr<DAFT_Impl>(nfeatures, size, scaleFactor, nlevels, edgeThreshold,
+                              patchSize, fastThreshold);
 }
 

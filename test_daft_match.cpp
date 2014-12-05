@@ -19,9 +19,9 @@ using namespace cv;
 /* ************************************************************************* */
 int main(int argc, char *argv[]) {
 
-  if (argc != 4) {
+  if (argc < 5) {
     cerr << "Error introducing input arguments!" << endl;
-    cerr << "The format needs to be: ./test_daft_match img1 imgN H1toN" << endl;
+    cerr << "The format needs to be: ./test_daft_match img1 imgN H1toN descriptor" << endl;
     return -1;
   }
 
@@ -29,15 +29,23 @@ int main(int argc, char *argv[]) {
   string img1File = argv[1];
   string imgNFile = argv[2];
   string HFile = argv[3];
+  string desc_type = argv[4];
+  int size = 128;
+  if (argc > 5)
+    size = (int)atoi(argv[5]);
+  string desc_matcher = "BruteForce-Hamming";
 
   // Open the input image
   img1 = imread(img1File, 1);
   imgN = imread(imgNFile, 1);
   cv::Mat H1toN = read_homography(HFile);
 
-  cout << H1toN;
   // Create daft object
-  Ptr<Feature2D> ddaft = DAFT::create();
+  Ptr<Feature2D> ddaft;
+  if (desc_type == "orb")
+      ddaft = ORB::create(3000);
+  else
+      ddaft = DAFT::create(3000, size);
 
   // Timing information
   double t1 = 0.0, t2 = 0.0;
@@ -59,7 +67,7 @@ int main(int argc, char *argv[]) {
   // Match the descriptors using NNDR matching strategy
   vector<vector<cv::DMatch> > dmatches;
   vector<cv::Point2f> matches, inliers;
-  cv::Ptr<cv::DescriptorMatcher> matcher = cv::DescriptorMatcher::create("BruteForce");
+  cv::Ptr<cv::DescriptorMatcher> matcher = cv::DescriptorMatcher::create(desc_matcher);
   float nndr = 0.8;
 
   t1 = cv::getTickCount();
