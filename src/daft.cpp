@@ -458,10 +458,18 @@ static void computeImagePyramid(const Mat& image,
 }
 
 
-/** Compute the DAFT_Impl keypoints on an image
+/** Compute the DAFT_Impl keypoints and their Harris Response on an image
  * @param image_pyramid the image pyramid to compute the features and descriptors on
  * @param mask_pyramid the masks to apply at every level
+ * @param layerInfo the bounding rectangles of each image layer
+ * @param layerScale the scale of each layer
  * @param keypoints the resulting keypoints, clustered per level
+ * @param response an empty vector to be filled with HarrisResponse
+ * @nfeatures the number of features
+ * @param scaleFactor the ratio of scale between to levels in the image pyramid
+ * @edgeThreshold how far away from the edge of the image we look for keypoints
+ * @patchSize The approximate size we look for points in
+ * @fastThreshold Threshold for quality of fast keypoints
  */
 static void computeKeyPoints(const Mat& imagePyramid,
                              const Mat& maskPyramid,
@@ -552,20 +560,11 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
 
     int i, level, nLevels = this->nlevels, nkeypoints = (int)keypoints.size();
 
+    // TODO: The way this should work: Find min size. Find corresponding size to each
+    // level, assuming scaleFactor that we have currently and assign correct levels.
+    // Note the highest level assigned and use that as nLevels
     if( !do_keypoints )
     {
-
-        // if we have pre-computed keypoints, they may use more levels than it
-        // is set in parameters !!!TODO!!! implement more correct method,
-        // independent from the used keypoint detector. Namely, the detector
-        // should provide correct size of each keypoint. Based on the keypoint
-        // size and the algorithm used (i.e. BRIEF, running on 31x31 patches)
-        // we should compute the approximate scale-factor that we need to
-        // apply. Then we should cluster all the computed scale-factors and for
-        // each cluster compute the corresponding image.
-        //
-        // In short, ultimately the descriptor should ignore octave parameter
-        // and deal only with the keypoint size.
         nLevels = 0;
         for( i = 0; i < nkeypoints; i++ )
         {
@@ -591,39 +590,22 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     computeImagePyramid(image, border, nLevels, layerInfo,
                         layerOfs, layerScale, imagePyramid, mask, maskPyramid);
 
+    // Get keypoints, those will hopefully be far enough from the border that no check will be required for the descriptor
     if( do_keypoints )
-    {
-        // Get keypoints, those will be far enough from the border that no check will be required for the descriptor
         computeKeyPoints(imagePyramid, maskPyramid,
                          layerInfo, layerScale, keypoints, harrisResponse,
                          nfeatures, scaleFactor, edgeThreshold, patchSize, fastThreshold);
-    }
     else
     {
         KeyPointsFilter::runByImageBorder(keypoints, image.size(), edgeThreshold);
+        HarrisResponses(image, keypoints, harrisResponse, 7, HARRIS_K);
     }
 
     if( do_descriptors )
     {
         int dsize = descriptorSize();
         nkeypoints = (int)keypoints.size();
-        if( nkeypoints == 0 )
-        {
-            _descriptors.release();
-            return;
-        }
-
         _descriptors.create(nkeypoints, dsize, CV_8U);
-
-        //for( level = 0; level < nLevels; level++ )
-        //{
-        //    // preprocess the resized image
-        //    Mat workingMat = imagePyramid(layerInfo[level]);
-
-        //    //boxFilter(working_mat, working_mat, working_mat.depth(), Size(5,5), Point(-1,-1), true, BORDER_REFLECT_101);
-        //    GaussianBlur(workingMat, workingMat, Size(5, 5), 2, 2, BORDER_REFLECT_101);
-        //}
-        // TODO check if blur helps (it currently makes things a little better)
         Mat descriptors = _descriptors.getMat();
         computeDAFTDescriptors(imagePyramid, layerInfo, layerScale, harrisResponse,
                                keypoints, descriptors, dsize, patchSize);
