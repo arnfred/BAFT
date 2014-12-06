@@ -43,10 +43,13 @@ int main(int argc, char *argv[]) {
   cout << "img1: " << img1File << "\t imgN: " << imgNFile << "\t H: " << HFile << "\n";
   int size = 128;
   float nndr = 0.8;
+  int patch = 35;
   if (argc > 4)
     size = (int)atoi(argv[4]);
   if (argc > 5)
     nndr = (float)atof(argv[5]);
+  if (argc > 6)
+    patch = (int)atoi(argv[6]);
   string desc_matcher = "BruteForce-Hamming";
 
   // Open the input image
@@ -57,9 +60,9 @@ int main(int argc, char *argv[]) {
   // Create daft object
   Ptr<Feature2D> ddaft;
   if (desc_type == "orb")
-      ddaft = ORB::create(3000);
+      ddaft = ORB::create(500);
   else
-      ddaft = DAFT::create(3000, size);
+      ddaft = DAFT::create(500, size, patch);
 
   // Timing information
   double t1 = 0.0, t2 = 0.0;
@@ -70,6 +73,7 @@ int main(int argc, char *argv[]) {
   cv::Mat desc1, descN;
 
   t1 = cv::getTickCount();
+  cout << "HERE1";
   ddaft->detectAndCompute(img1, cv::noArray(), kpts1, desc1);
   ddaft->detectAndCompute(imgN, cv::noArray(), kptsN, descN);
   t2 = cv::getTickCount();

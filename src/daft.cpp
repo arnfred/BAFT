@@ -205,6 +205,7 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
         s = skew(Range(i,i+1), Range::all()).reshape(0, 2);
         points_kp = (points*s); // (s.t()*points.t()).t() = points*s
         points_kp = points_kp.reshape(0,dsize); // 16 numbers per row
+
         // Find image region of interest in image pyramid
         kp = keypoints[i];
         int x = kp.pt.x / layerScale[kp.octave];
@@ -223,6 +224,7 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
             {
                 float x0 = row[2*k] + x;
                 float y0 = row[2*k+1] + y;
+
                 picked = pick(img_roi, x0, y0);
                 if (picked < min_val)
                 {
@@ -541,17 +543,14 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     if( (!do_keypoints && !do_descriptors) || _image.empty() )
         return;
 
-    int halfPatchSize = patchSize;
-    int border = std::max(edgeThreshold, halfPatchSize);
-    cout << "border: " << border << "\n";
+    int border = std::max(edgeThreshold, patchSize);
 
     Mat image = _image.getMat(), mask = _mask.getMat();
-    if( image.type() != CV_8UC1 )
+    if( image.type() != CV_8UC1 ) {
         cvtColor(_image, image, COLOR_BGR2GRAY);
-    // TODO: use only green channel
+    }
 
     int i, level, nLevels = this->nlevels, nkeypoints = (int)keypoints.size();
-    bool sortedByLevel = true;
 
     if( !do_keypoints )
     {
@@ -572,8 +571,6 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         {
             level = keypoints[i].octave;
             CV_Assert(level >= 0);
-            if( i > 0 && level < keypoints[i-1].octave )
-                sortedByLevel = false;
             nLevels = std::max(nLevels, level);
         }
         nLevels++;
@@ -604,27 +601,11 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     else
     {
         KeyPointsFilter::runByImageBorder(keypoints, image.size(), edgeThreshold);
-
-        if( !sortedByLevel )
-        {
-            std::vector<std::vector<KeyPoint> > allKeypoints(nLevels);
-            nkeypoints = (int)keypoints.size();
-            for( i = 0; i < nkeypoints; i++ )
-            {
-                level = keypoints[i].octave;
-                CV_Assert(0 <= level);
-                allKeypoints[level].push_back(keypoints[i]);
-            }
-            keypoints.clear();
-            for( level = 0; level < nLevels; level++ )
-                std::copy(allKeypoints[level].begin(), allKeypoints[level].end(), std::back_inserter(keypoints));
-        }
     }
 
     if( do_descriptors )
     {
         int dsize = descriptorSize();
-
         nkeypoints = (int)keypoints.size();
         if( nkeypoints == 0 )
         {
@@ -633,7 +614,6 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         }
 
         _descriptors.create(nkeypoints, dsize, CV_8U);
-        std::vector<Point> pattern;
 
         //for( level = 0; level < nLevels; level++ )
         //{
