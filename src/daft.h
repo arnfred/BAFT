@@ -10,8 +10,8 @@ class DAFT : public Feature2D
 {
 public:
 
-    CV_WRAP static Ptr<DAFT> create(int nfeatures=500, int size =128, float scaleFactor=1.2f, int nlevels=8, int edgeThreshold=31,
-        int patchSize=31, int fastThreshold=20);
+    CV_WRAP static Ptr<DAFT> create(int nfeatures=500, int size=128, int patchSize=35, float scaleFactor=1.2f, int nlevels=8, int edgeThreshold=31,
+        int fastThreshold=20);
 
     CV_WRAP virtual void setMaxFeatures(int maxFeatures) = 0;
     CV_WRAP virtual int getMaxFeatures() const = 0;

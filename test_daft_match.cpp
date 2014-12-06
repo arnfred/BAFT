@@ -19,20 +19,34 @@ using namespace cv;
 /* ************************************************************************* */
 int main(int argc, char *argv[]) {
 
-  if (argc < 5) {
+  if (argc < 4) {
     cerr << "Error introducing input arguments!" << endl;
-    cerr << "The format needs to be: ./test_daft_match img1 imgN H1toN descriptor" << endl;
+    cerr << "The format needs to be: ./test_daft_match testset number descriptor" << endl;
     return -1;
   }
 
   cv::Mat img1, imgN;
-  string img1File = argv[1];
-  string imgNFile = argv[2];
-  string HFile = argv[3];
-  string desc_type = argv[4];
+  const string testset = argv[1];
+  const string imgNumber = argv[2];
+  string fileEnding = ".ppm";
+  if (testset == "boat")
+    fileEnding = ".pgm";
+
+  std::ostringstream img1Stream, imgNStream, HStream;
+  img1Stream << "../data/" << testset << "/img1" << fileEnding;
+  imgNStream << "../data/" << testset << "/img" << imgNumber << fileEnding;
+  HStream << "../data/" << testset << "/H1to" << imgNumber << "p";
+  const string img1File = img1Stream.str();
+  const string imgNFile = imgNStream.str();
+  const string HFile = HStream.str();
+  const string desc_type = argv[3];
+  cout << "img1: " << img1File << "\t imgN: " << imgNFile << "\t H: " << HFile << "\n";
   int size = 128;
+  float nndr = 0.8;
+  if (argc > 4)
+    size = (int)atoi(argv[4]);
   if (argc > 5)
-    size = (int)atoi(argv[5]);
+    nndr = (float)atof(argv[5]);
   string desc_matcher = "BruteForce-Hamming";
 
   // Open the input image
@@ -68,7 +82,6 @@ int main(int argc, char *argv[]) {
   vector<vector<cv::DMatch> > dmatches;
   vector<cv::Point2f> matches, inliers;
   cv::Ptr<cv::DescriptorMatcher> matcher = cv::DescriptorMatcher::create(desc_matcher);
-  float nndr = 0.8;
 
   t1 = cv::getTickCount();
   matcher->knnMatch(desc1, descN, dmatches, 2);

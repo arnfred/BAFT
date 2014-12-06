@@ -52,7 +52,7 @@
 using namespace std;
 using namespace cv;
 
-const float HARRIS_K = 0.04f;
+const float HARRIS_K = 0.02f;
 
 
 /**
@@ -120,7 +120,7 @@ static inline float pick( const Mat& img, float x, float y )
     int y0 = (int)y;
     float xd = 1 - (x - (float)x0);
     float yd = 1 - (y - (float)y0);
-    int step = img.step1();
+    const int step = img.step1();
     const uchar* ptr = img.ptr<uchar>() + y0*step + x0;
     float xd_inv = 1 - xd;
     float yd_inv = 1 - yd;
@@ -162,7 +162,7 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints )
 
 static void generatePoints( Mat& points, int npoints, int patchSize )
 {
-    RNG rng(0x34985730);
+    RNG rng(0x34985719);
     float u;
     for( int i = 0; i < npoints; i++ )
     {
@@ -195,7 +195,7 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
     // We need four points for every four bit element, which means eight per byte
     int npoints = dsize*8;
     Mat points(npoints, 2, CV_32F);
-    generatePoints(points, npoints, 35); // TODO: load fixed set of points instead of generating them
+    generatePoints(points, npoints, patchSize); // TODO: load fixed set of points instead of generating them
 
     // Now for each keypoint, collect data for each point and construct the descriptor
     KeyPoint kp;
@@ -269,8 +269,8 @@ static inline float getScale(int level, double scaleFactor)
 class DAFT_Impl : public DAFT
 {
 public:
-    explicit DAFT_Impl(int _nfeatures, int _size, float _scaleFactor, int _nlevels, int _edgeThreshold,
-             int _patchSize, int _fastThreshold) :
+    explicit DAFT_Impl(int _nfeatures, int _size, int _patchSize, float _scaleFactor, int _nlevels, int _edgeThreshold,
+             int _fastThreshold) :
         nfeatures(_nfeatures), size(_size), scaleFactor(_scaleFactor), nlevels(_nlevels),
         edgeThreshold(_edgeThreshold), patchSize(_patchSize), fastThreshold(_fastThreshold)
     {}
@@ -541,10 +541,8 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     if( (!do_keypoints && !do_descriptors) || _image.empty() )
         return;
 
-    //ROI handling. TODO: this will change with new descriptor
-    const int HARRIS_BLOCK_SIZE = 9;
-    int halfPatchSize = patchSize / 2;
-    int border = std::max(edgeThreshold, std::max(halfPatchSize, HARRIS_BLOCK_SIZE/2))+1;
+    int halfPatchSize = patchSize;
+    int border = std::max(edgeThreshold, halfPatchSize);
     cout << "border: " << border << "\n";
 
     Mat image = _image.getMat(), mask = _mask.getMat();
@@ -626,7 +624,6 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     if( do_descriptors )
     {
         int dsize = descriptorSize();
-        cout << "Descriptor size: " << dsize << "\n";
 
         nkeypoints = (int)keypoints.size();
         if( nkeypoints == 0 )
@@ -638,58 +635,25 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         _descriptors.create(nkeypoints, dsize, CV_8U);
         std::vector<Point> pattern;
 
-        for( level = 0; level < nLevels; level++ )
-        {
-            // preprocess the resized image
-            Mat workingMat = imagePyramid(layerInfo[level]);
-
-            //boxFilter(working_mat, working_mat, working_mat.depth(), Size(5,5), Point(-1,-1), true, BORDER_REFLECT_101);
-            GaussianBlur(workingMat, workingMat, Size(5, 5), 2, 2, BORDER_REFLECT_101);
-        }
-        // TODO check if blur helps (it currently makes things a little better)
-        Mat descriptors = _descriptors.getMat();
-        computeDAFTDescriptors(imagePyramid, layerInfo, layerScale, harrisResponse,
-                               keypoints, descriptors, dsize, patchSize);
-
-        //const int npoints = 512;
-        //Point patternbuf[npoints];
-        //const Point* pattern0 = (const Point*)bit_pattern_31_;
-
-        //if( patchSize != 31 )
-        //{
-        //    pattern0 = patternbuf;
-        //    makeRandomPattern(patchSize, patternbuf, npoints);
-        //}
-
-        //CV_Assert( wta_k == 2 || wta_k == 3 || wta_k == 4 );
-
-        //if( wta_k == 2 )
-        //    std::copy(pattern0, pattern0 + npoints, std::back_inserter(pattern));
-        //else
-        //{
-        //    int ntuples = descriptorSize()*4;
-        //    initializeDAFTPattern(pattern0, pattern, ntuples, wta_k, npoints);
-        //}
-
         //for( level = 0; level < nLevels; level++ )
         //{
         //    // preprocess the resized image
         //    Mat workingMat = imagePyramid(layerInfo[level]);
 
         //    //boxFilter(working_mat, working_mat, working_mat.depth(), Size(5,5), Point(-1,-1), true, BORDER_REFLECT_101);
-        //    GaussianBlur(workingMat, workingMat, Size(7, 7), 2, 2, BORDER_REFLECT_101);
+        //    GaussianBlur(workingMat, workingMat, Size(5, 5), 2, 2, BORDER_REFLECT_101);
         //}
-
-        //Mat descriptors = _descriptors.getMat();
-        //computeDAFTDescriptors(imagePyramid, layerInfo, layerScale,
-        //                       keypoints, descriptors, pattern, dsize, wta_k, harrisResponse);
+        // TODO check if blur helps (it currently makes things a little better)
+        Mat descriptors = _descriptors.getMat();
+        computeDAFTDescriptors(imagePyramid, layerInfo, layerScale, harrisResponse,
+                               keypoints, descriptors, dsize, patchSize);
     }
 }
 
-Ptr<DAFT> DAFT::create(int nfeatures, int size, float scaleFactor, int nlevels, int edgeThreshold,
-         int patchSize, int fastThreshold)
+Ptr<DAFT> DAFT::create(int nfeatures, int size, int patchSize, float scaleFactor, int nlevels, int edgeThreshold,
+         int fastThreshold)
 {
-    return makePtr<DAFT_Impl>(nfeatures, size, scaleFactor, nlevels, edgeThreshold,
-                              patchSize, fastThreshold);
+    return makePtr<DAFT_Impl>(nfeatures, size, patchSize, scaleFactor, nlevels, edgeThreshold,
+                              fastThreshold);
 }
 
