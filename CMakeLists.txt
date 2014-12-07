@@ -2,7 +2,7 @@ project(DAFT)
 cmake_minimum_required(VERSION 2.4)
 
 # ============================================================================ #
-add_definitions(-DDEBUG -g -O3 -Wall -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE)
+add_definitions(-DDEBUG -g -O3 -Wall -std=c++11 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE)
 if(COMMAND cmake_policy)
    cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
@@ -40,6 +40,13 @@ add_executable(
   ${SRCS}
 )
 
+# Write out descriptors
+add_executable(
+  write_descriptors
+  write_descriptors.cpp
+  ${SRCS}
+)
+
 target_link_libraries(
   test_daft
   ${OpenCV_LIBS}
@@ -47,5 +54,10 @@ target_link_libraries(
 
 target_link_libraries(
   test_daft_match
+  ${OpenCV_LIBS}
+)
+
+target_link_libraries(
+  write_descriptors
   ${OpenCV_LIBS}
 )
