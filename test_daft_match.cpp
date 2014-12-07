@@ -44,12 +44,15 @@ int main(int argc, char *argv[]) {
   int size = 128;
   float nndr = 0.8;
   int patch = 35;
+  float scaleFactor = 1.2;
   if (argc > 4)
     size = (int)atoi(argv[4]);
   if (argc > 5)
     nndr = (float)atof(argv[5]);
   if (argc > 6)
     patch = (int)atoi(argv[6]);
+  if (argc > 7)
+    scaleFactor = (float)atof(argv[7]);
   string desc_matcher = "BruteForce-Hamming";
 
   // Open the input image
@@ -60,9 +63,9 @@ int main(int argc, char *argv[]) {
   // Create daft object
   Ptr<Feature2D> ddaft;
   if (desc_type == "orb")
-      ddaft = ORB::create(500);
+      ddaft = ORB::create(3000);
   else
-      ddaft = DAFT::create(500, size, patch);
+      ddaft = DAFT::create(3000, size, patch, scaleFactor);
 
   // Timing information
   double t1 = 0.0, t2 = 0.0;

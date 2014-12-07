@@ -114,55 +114,55 @@ HarrisResponses(const Mat& img, std::vector<KeyPoint>& pts,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static inline float pick( const Mat& img, float x, float y )
+static inline float pick( const Mat& img, float x, float y, int step )
 {
     int x0 = (int)x;
     int y0 = (int)y;
     float xd = 1 - (x - (float)x0);
     float yd = 1 - (y - (float)y0);
-    const int step = img.step1();
     const uchar* ptr = img.ptr<uchar>() + y0*step + x0;
-    float xd_inv = 1 - xd;
-    float yd_inv = 1 - yd;
-    return ptr[-1]*xd + ptr[0] + ptr[1]*xd_inv + ptr[-step]*yd + ptr[step]*yd_inv;
+    return ptr[-1]*xd + ptr[0] + ptr[1]*(1 - xd) + ptr[-step]*yd + ptr[step]*(1 - yd);
 }
 
 static void
 computeSkew( const Mat& responses, Mat& skew, int nkeypoints )
 {
     int i;
-    Mat corr(2, 2, CV_32F), rotate(2, 2, CV_32F), eig_vec, eig_val;
-    Mat squeeze = Mat::zeros(2, 2, CV_32F), skew_roi;
+    Mat corr(2, 2, CV_32F), eig_vec, eig_val;
+    float* corr_p = corr.ptr<float>();
     for (i = 0; i < nkeypoints; i++)
     {
-        // Build approx correlation matrix
-        corr.at<float>(0,0) = responses.at<float>(i,0);
-        corr.at<float>(0,1) = responses.at<float>(i,2);
-        corr.at<float>(1,0) = responses.at<float>(i,2);
-        corr.at<float>(1,1) = responses.at<float>(i,1);
+        // Declare pointers to the rows corresponding to keypoint `i`
+        const float* resp_row = responses.ptr<float>(i);
+        float* skew_row = skew.ptr<float>(i);
+
+        corr_p[0] = resp_row[0];
+        corr_p[1] = resp_row[2];
+        corr_p[2] = resp_row[2];
+        corr_p[3] = resp_row[1];
 
         // Find eigenvectors
         eigen(corr, eig_val, eig_vec);
-        eig_val = eig_val.t() / std::sqrt(eig_val.at<float>(0)*eig_val.at<float>(1));
-        //sqrt(eig_val.t() / std::sqrt(eig_val.at<float>(0)*eig_val.at<float>(1)), eig_val);
+        float* val_p = eig_val.ptr<float>();
+        const float* vec_p = eig_vec.ptr<float>();
 
-        // Build rotation and squeeze matrix
-        squeeze.at<float>(0,0) = eig_val.at<float>(0);
-        squeeze.at<float>(1,1) = eig_val.at<float>(1);
-        rotate.at<float>(0,0) = -1*eig_vec.at<float>(0,1);
-        rotate.at<float>(0,1) = eig_vec.at<float>(0,0);
-        rotate.at<float>(1,0) = eig_vec.at<float>(0,0);
-        rotate.at<float>(1,1) = eig_vec.at<float>(0,1);
+        // Normalize eigen values
+        const float val_sq = std::sqrt(val_p[0]*val_p[1]);
+        val_p[0] = std::sqrt(val_p[0] / val_sq);
+        val_p[1] = std::sqrt(val_p[1] / val_sq);
 
-        // Insert product into return matrix
-        skew_roi = skew(Range(i,i+1),Range::all()).reshape(0,2);
-        skew_roi = (rotate * squeeze).t();
+        // Calculate transformation matrix based on the matrix multiplication
+        // of skew `diag(eig_val)` and rotate [-1*vec[1] vec[0]; vec[0] vec[1]]
+        skew_row[0] = -1*vec_p[1]*val_p[0];
+        skew_row[1] = vec_p[0]*val_p[1];
+        skew_row[2] = vec_p[0]*val_p[0];
+        skew_row[3] = vec_p[1]*val_p[1];
     }
 }
 
 static void generatePoints( Mat& points, int npoints, int patchSize )
 {
-    RNG rng(0x34985719);
+    RNG rng(0x34985714);
     float u;
     for( int i = 0; i < npoints; i++ )
     {
@@ -201,64 +201,46 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
     KeyPoint kp;
     for (int i = 0; i < nkeypoints; i++)
     {
-        // Prepare points
-        s = skew(Range(i,i+1), Range::all()).reshape(0, 2);
-        points_kp = (points*s); // (s.t()*points.t()).t() = points*s
-        points_kp = points_kp.reshape(0,dsize); // 16 numbers per row
-
         // Find image region of interest in image pyramid
         kp = keypoints[i];
         int x = kp.pt.x / layerScale[kp.octave];
         int y = kp.pt.y / layerScale[kp.octave];
         img_roi = imagePyramid(layerInfo[kp.octave]); // TODO: this can break for unsupported keypoints
+        int step = img_roi.step1();
         uchar* desc = descriptors.ptr<uchar>(i);
+        const float* p = points.ptr<float>();
+        const float* s = skew.ptr<float>(i);
 
-        for (int j = 0, p_idx = 0; j < dsize; j++, p_idx +=8)
+        float min_val = 999, max_val = 0, picked = 0;
+        int min_idx = 0, max_idx = 0, byte_val = 0;
+        for (int j = 0; j < dsize*8; j++)
         {
-            const float* row = points_kp.ptr<float>(j);
+            // Matrix multiplication by hand
+            float x0 = p[2*j]*s[0] + p[2*j+1]*s[2] + x;
+            float y0 = p[2*j]*s[1] + p[2*j+1]*s[3] + y;
 
-            // Find max and min for the points picked
-            float min_val = 999, max_val = 0, picked = 0;
-            int min_idx = 0, max_idx = 0;
-            for (int k = 0; k < 4; k++)
+            picked = pick(img_roi, x0, y0, step);
+            if (picked < min_val)
             {
-                float x0 = row[2*k] + x;
-                float y0 = row[2*k+1] + y;
+                min_idx = j % 4;
+                min_val = picked;
+            }
+            else if (picked > max_val)
+            {
+                max_idx = j % 4; // j & 3??
+                max_val = picked;
+            }
 
-                picked = pick(img_roi, x0, y0);
-                if (picked < min_val)
-                {
-                    min_idx = k;
-                    min_val = picked;
-                }
-                else if (picked > max_val)
-                {
-                    max_idx = k;
-                    max_val = picked;
-                }
-            }
-            int byte_val = (max_idx + (min_idx << 2));
-            min_val = 999; max_val = 0; // Reset
-            for (int k = 4; k < 8; k++)
+            if (j % 8 == 0)
             {
-                float x0 = row[2*k] + x;
-                float y0 = row[2*k+1] + y;
-                picked = pick(img_roi, x0, y0);
-                if (picked < min_val)
-                {
-                    min_idx = k - 4;
-                    min_val = picked;
-                }
-                else if (picked > max_val)
-                {
-                    max_idx = k - 4;
-                    max_val = picked;
-                }
+                desc[(j >> 3)] = (uchar)((byte_val << 4) + (max_idx + (min_idx << 2)));
             }
-            byte_val = (byte_val << 4) + (max_idx + (min_idx << 2));
-            desc[j] = (uchar)byte_val;
+            else if (j % 4 == 0)
+            {
+                byte_val = (max_idx + (min_idx << 2));
+                min_val = 999; max_val = 0; // Reset
+            }
         }
-        //cout << descriptors(Range(i,i+1), Range::all()) << "\n\n";
     }
 }
 
