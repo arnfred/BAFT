@@ -76,7 +76,6 @@ int main(int argc, char *argv[]) {
   cv::Mat desc1, descN;
 
   t1 = cv::getTickCount();
-  cout << "HERE1";
   ddaft->detectAndCompute(img1, cv::noArray(), kpts1, desc1);
   ddaft->detectAndCompute(imgN, cv::noArray(), kptsN, descN);
   t2 = cv::getTickCount();

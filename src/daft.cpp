@@ -211,9 +211,9 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
         const float* p = points.ptr<float>();
         const float* s = skew.ptr<float>(i);
 
-        float min_val = 999, max_val = 0, picked = 0;
-        int min_idx = 0, max_idx = 0, byte_val = 0;
-        for (int j = 0; j < dsize*8; j++)
+        float min_val = 9999, max_val = 0, picked = 0;
+        unsigned int min_idx = 0, max_idx = 0, byte_val = 0, l = (unsigned int)dsize*8;
+        for (unsigned int j = 0; j < l; j++)
         {
             // Matrix multiplication by hand
             float x0 = p[2*j]*s[0] + p[2*j+1]*s[2] + x;
@@ -225,19 +225,16 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
                 min_idx = j % 4;
                 min_val = picked;
             }
-            else if (picked > max_val)
+            if (picked > max_val)
             {
                 max_idx = j % 4; // j & 3??
                 max_val = picked;
             }
-
-            if (j % 8 == 0)
-            {
-                desc[(j >> 3)] = (uchar)((byte_val << 4) + (max_idx + (min_idx << 2)));
-            }
-            else if (j % 4 == 0)
-            {
-                byte_val = (max_idx + (min_idx << 2));
+            if ((j+1) % 4 == 0) {
+                if ((j+1) % 8 == 0)
+                    desc[(j >> 3)] = (uchar)((byte_val << 4) + (max_idx + (min_idx << 2)));
+                else
+                    byte_val = (max_idx + (min_idx << 2));
                 min_val = 999; max_val = 0; // Reset
             }
         }
