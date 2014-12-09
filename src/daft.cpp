@@ -82,15 +82,6 @@ HarrisResponses(const Mat& img, std::vector<KeyPoint>& pts,
             ofs[i*blockSize + j] = (int)(i*step + j);
 
 
-    int r_big = 14;
-    int blockSize_big = r_big*2+1;
-
-    AutoBuffer<int> ofsbuf_big(blockSize_big*blockSize_big);
-    int* ofs_big = ofsbuf_big;
-    for( int i = 0; i < blockSize_big; i++ )
-        for( int j = 0; j < blockSize_big; j++ )
-            ofs_big[i*blockSize_big + j] = (int)(i*step + j);
-
     for( ptidx = 0; ptidx < ptsize; ptidx++ )
     {
         float kp_x = pts[ptidx].pt.x;
@@ -103,7 +94,6 @@ HarrisResponses(const Mat& img, std::vector<KeyPoint>& pts,
         float yd_inv = 1 - yd;
 
         const uchar* ptr0 = ptr00 + (y0 - r)*step + x0 - r;
-        const uchar* ptr0_big = ptr00 + (y0 - r_big)*step + x0 - r_big;
         float a = 0, b = 0, c = 0, d = 0;
 
         for( int k = 0; k < blockSize*blockSize; k++ )
@@ -120,20 +110,6 @@ HarrisResponses(const Mat& img, std::vector<KeyPoint>& pts,
         }
         pts[ptidx].response = (a * b - c * c -
                                harris_k * (a + b) * (a + b))*scale_sq_sq;
-
-        a = 0, b = 0, c = 0, d = 0;
-        for( int k = 0; k < blockSize_big*blockSize_big; k++ )
-        {
-            const uchar* ptr = ptr0_big + ofs_big[k];
-            float Ix = ((ptr[0]*xd  + ptr[1]  + ptr[2]*xd_inv + ptr[-step+1]*yd + ptr[step+1]*yd_inv) -
-                        (ptr[-2]*xd + ptr[-1] + ptr[0]*xd_inv + ptr[-step-1]*yd + ptr[step-1]*yd_inv));
-            float Iy = ((ptr[0]*yd + ptr[step] + ptr[2*step]*yd_inv + ptr[step-1]*xd + ptr[step+1]*xd_inv) -
-                        (ptr[-2*step]*yd + ptr[-step] + ptr[0]*yd_inv + ptr[-step-1]*xd + ptr[-step+1]*xd_inv));
-            a += (float)(Ix*Ix);
-            b += (float)(Iy*Iy);
-            c += (float)(Ix*Iy);
-            d += (float)Ix;
-        }
 
         response.at<float>(ptidx,0) = a;
         response.at<float>(ptidx,1) = b;
