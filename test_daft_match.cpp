@@ -7,6 +7,8 @@
 
 #include "./src/utils.h"
 #include "./src/daft.h"
+#include <opencv2/xfeatures2d.hpp>
+#include <opencv2/xfeatures2d/nonfree.hpp>
 
 // System
 #include <string>
@@ -43,7 +45,7 @@ int main(int argc, char *argv[]) {
   cout << "img1: " << img1File << "\t imgN: " << imgNFile << "\t H: " << HFile << "\n";
   int size = 128;
   float nndr = 0.8;
-  int patch = 35;
+  int patch = 30;
   float scaleFactor = 1.2;
   if (argc > 4)
     size = (int)atoi(argv[4]);
@@ -54,6 +56,8 @@ int main(int argc, char *argv[]) {
   if (argc > 7)
     scaleFactor = (float)atof(argv[7]);
   string desc_matcher = "BruteForce-Hamming";
+  if (desc_type == "sift")
+      string desc_matcher = "BruteForce";
 
   // Open the input image
   img1 = imread(img1File, 1);
@@ -64,6 +68,8 @@ int main(int argc, char *argv[]) {
   Ptr<Feature2D> ddaft;
   if (desc_type == "orb")
       ddaft = ORB::create(3000);
+  else if (desc_type == "sift")
+      ddaft = xfeatures2d::SIFT::create(3000);
   else
       ddaft = DAFT::create(3000, size, patch, scaleFactor);
 
