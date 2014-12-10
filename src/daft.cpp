@@ -587,27 +587,27 @@ static int computeKeyPoints(const Mat& imagePyramid,
             keypoints[i].size = patchSize*layerScale[level];
             keypoints[i].pt *= layerScale[level];
         }
-        Mat img_0 = imagePyramid(layerInfo[0]);
-        Mat dx_0 = diff_x(layerInfo[0]);
-        Mat dy_0 = diff_y(layerInfo[0]);
-        HarrisResponses(img_0, dx_0, dy_0, keypoints, cur_response, 21, HARRIS_K);
-        for( i = 0; i < nkeypoints; i++ )
-        {
-            index = keypoints[i].class_id;
-            keypoints[i].class_id = 0;
-            float* response_row = response.ptr<float>(i + responseOffset);
-            float* cur_row = cur_response.ptr<float>(index);
-            for ( int j = 0; j < 5; j++ )
-                response_row[j] = cur_row[j];
-        }
+        //Mat img_0 = imagePyramid(layerInfo[0]);
+        //Mat dx_0 = diff_x(layerInfo[0]);
+        //Mat dy_0 = diff_y(layerInfo[0]);
+        //HarrisResponses(img_0, dx_0, dy_0, keypoints, cur_response, 21, HARRIS_K);
+        //for( i = 0; i < nkeypoints; i++ )
+        //{
+        //    index = keypoints[i].class_id;
+        //    keypoints[i].class_id = 0;
+        //    float* response_row = response.ptr<float>(i + responseOffset);
+        //    float* cur_row = cur_response.ptr<float>(index);
+        //    for ( int j = 0; j < 5; j++ )
+        //        response_row[j] = cur_row[j];
+        //}
 
         responseOffset += nkeypoints;
         std::copy(keypoints.begin(), keypoints.end(), std::back_inserter(allKeypoints));
-        if ( level == 3 ) {
-            cout << "scale: " << layerScale[level] << " level: " << level << "\n";
-            cout << "pt: (" << allKeypoints[focus_offset].pt.x << ", " << allKeypoints[focus_offset].pt.y << ")\n";
-            cout << response.row(focus_offset) << "\n";
-        }
+        //if ( level == 3 ) {
+        //    cout << "scale: " << layerScale[level] << " level: " << level << "\n";
+        //    cout << "pt: (" << allKeypoints[focus_offset].pt.x << ", " << allKeypoints[focus_offset].pt.y << ")\n";
+        //    cout << response.row(focus_offset) << "\n";
+        //}
     }
     return focus_offset; // For debugging
 }
@@ -629,6 +629,7 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
 
     bool do_keypoints = !useProvidedKeypoints;
     bool do_descriptors = _descriptors.needed();
+    int debug_idx = 0;
 
     if( (!do_keypoints && !do_descriptors) || _image.empty() )
         return;
@@ -692,11 +693,12 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         computeKeyPoints(imagePyramid, maskPyramid, diff_x, diff_y,
                          layerInfo, layerScale, keypoints, harrisResponse,
                          nfeatures, scaleFactor, edgeThreshold, patchSize, fastThreshold);
+        HarrisResponses(image, diff_x(layerInfo[0]), diff_y(layerInfo[0]), keypoints, harrisResponse, 21, HARRIS_K);
     }
     else // supplied keypoints
     {
         KeyPointsFilter::runByImageBorder(keypoints, image.size(), edgeThreshold);
-        HarrisResponses(image, diff_x(layerInfo[0]), diff_y(layerInfo[0]), keypoints, harrisResponse, 7, HARRIS_K);
+        HarrisResponses(image, diff_x(layerInfo[0]), diff_y(layerInfo[0]), keypoints, harrisResponse, 21, HARRIS_K);
     }
 
     if( do_descriptors )
