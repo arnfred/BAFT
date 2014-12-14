@@ -373,17 +373,6 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
             d += Ix;
             e += Iy;
         }
-        // Debug info:
-        //if ( ptidx == 0 && pts[ptidx].octave == 3 )
-        //{
-        //    cout << "\n\npoint: " << kp_x << ", " << kp_y << "\n";
-        //    cout << "xd: " << xd << ", x0: " << x0 << "\n";
-        //    cout << "a: " << a << "\tb: " << b << "\tc:" << c << "\n";
-        //    //cout << diff_x(Range(kp_y-r,kp_y-r+5), Range(kp_x-r, kp_x-r+5)) << "\n";
-        //    //cout << diff_y(Range(kp_y-r,kp_y-r+5), Range(kp_x-r, kp_x-r+5)) << "\n";
-        //    //cout << diff_y(Range(kp_y-2,kp_y+2+1), Range(kp_x-2, kp_x+2+1)) << "\n";
-        //    //cout << img(Range(kp_y-2,kp_y+2+1), Range(kp_x-2, kp_x+2+1)) << "\n";
-        //}
         pts[ptidx].response = ((float)a * b - (float)c * c -
                                harris_k * ((float)a + b) * ((float)a + b))*scale_sq_sq;
 
@@ -406,12 +395,6 @@ static inline float pick( const Mat& img, float x, float y, bool debug )
     float xd = (x - (float)x0);
     float yd = (y - (float)y0);
     const uchar* ptr = img.ptr<uchar>() + y0*step + x0;
-    //if ( debug )
-    //{
-    //    cout << "x: " << x << ", y: " << y << "\n";
-    //    cout << "x: " << x0 << ", y: " << y0 << "\n";
-    //    cout << "left: " << (int)ptr[-1] << ", center: " << (int)ptr[0] << ", right: " << (int)ptr[1] << ", top: " << (int)ptr[-step] << ", bottom: " << (int)ptr[step] << "\n";
-    //}
     return ptr[-1]*(1 - xd) + ptr[0] + ptr[1]*xd + ptr[-step]*(1-yd) + ptr[step]*yd;
 }
 
@@ -420,7 +403,7 @@ template <typename T> int sgn(T val) {
 }
 
 static void
-computeSkew( const Mat& responses, Mat& skew, int nkeypoints, int debug_idx )
+computeSkew( const Mat& responses, Mat& skew, int nkeypoints)
 {
     Mat corr(2, 2, CV_32F), eig_vec, eig_val;
     float* corr_p = corr.ptr<float>();
@@ -440,11 +423,6 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints, int debug_idx )
         eigen(corr, eig_val, eig_vec);
         float* val_p = eig_val.ptr<float>();
         const float* vec_p = eig_vec.ptr<float>();
-        //if ( i == debug_idx )
-        //{
-        //    cout << "Ix: " << resp_row[0] << ", Iy: " << resp_row[1] << "\n";
-        //    cout << "eig_val:\n" << eig_val << "\n";
-        //}
 
         // Normalize eigen values
         const float val_sq = std::sqrt(val_p[0]*val_p[1]);
@@ -457,44 +435,18 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints, int debug_idx )
         skew_row[1] = -1*vec_p[0]*val_p[1];
         skew_row[2] = -1*vec_p[0]*val_p[0];
         skew_row[3] = -1*vec_p[1]*val_p[1];
-
-        //if ( i == debug_idx )
-        //{
-        //    cout << "eig_val_norm:\n" << eig_val << "\n";
-        //    cout << "eig_vec:\n" << eig_vec << "\n";
-        //    cout << "skew:\n" << skew.row(i) << "\n";
-        //}
     }
 }
-
-//static void generatePoints( Mat& points, int npoints, int patchSize )
-//{
-//    RNG rng(0x34985710);
-//    float u;
-//    float width = 5;
-//    float* p = points.ptr<float>();
-//    int l = npoints*2;
-//    for( int i = 0; i < l; i++ )
-//    {
-//        u = rng.uniform(-width, width);
-//        if (u >= 0)
-//            p[i] = exp(-1*u);
-//        else
-//            p[i] = -1*exp(u);
-//    }
-//    points *= patchSize;
-//    //cout << "points:\n" << points << "\n\n";
-//}
 
 static void
 computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerInfo,
                        const std::vector<float>& layerScale, const Mat& harrisResponse, std::vector<KeyPoint>& keypoints,
-                       Mat& descriptors, int dsize, int patchSize, int debug_idx )
+                       Mat& descriptors, int dsize, int patchSize)
 {
     // Compute skew matrix for each keypoint
     int nkeypoints = (int)keypoints.size();
     Mat skew(nkeypoints, 4, CV_32F), points_kp, s, img_roi;
-    computeSkew(harrisResponse, skew, nkeypoints, debug_idx);
+    computeSkew(harrisResponse, skew, nkeypoints);
 
     // Now for each keypoint, collect data for each point and construct the descriptor
     KeyPoint kp;
@@ -521,7 +473,7 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
             float x0 = (p[2*j]*s[0] + p[2*j+1]*s[1])*scale + x;
             float y0 = (p[2*j]*s[2] + p[2*j+1]*s[3])*scale + y;
 
-            picked = pick(img_roi, x0, y0, false);//, debug_idx == i && j < 5);
+            picked = pick(img_roi, x0, y0, false);
             if (picked < min_val)
             {
                 min_idx = j % 4;
@@ -801,7 +753,7 @@ static void computeImagePyramid(const Mat& image,
  * @patchSize The approximate size we look for points in
  * @fastThreshold Threshold for quality of fast keypoints
  */
-static int computeKeyPoints(const Mat& imagePyramid,
+static void computeKeyPoints(const Mat& imagePyramid,
                              const Mat& maskPyramid,
                              const Mat& diff_x, const Mat& diff_y,
                              const std::vector<Rect>& layerInfo,
@@ -821,7 +773,6 @@ static int computeKeyPoints(const Mat& imagePyramid,
 
     Mat cur_response(nfeatures, 5, CV_32F);
     int responseOffset = 0;
-    int focus_offset = 0;
 
     for( level = 0; level < nlevels; level++ )
     {
@@ -844,12 +795,6 @@ static int computeKeyPoints(const Mat& imagePyramid,
         // Filter remaining points based on their Harris Response
         HarrisResponses(img, dx, dy, keypoints, cur_response, 7, HARRIS_K);
         KeyPointsFilter::retainBest(keypoints, featuresNum);
-        //if ( level == 3 )
-        //{
-        //    keypoints[0].pt.x = 388.f; //
-        //    keypoints[0].pt.y = 255.f;
-        //    focus_offset = responseOffset;
-        //}
 
 
         nkeypoints = (int)keypoints.size();
@@ -857,7 +802,6 @@ static int computeKeyPoints(const Mat& imagePyramid,
 
         for( i = 0; i < nkeypoints; i++ )
         {
-            //cout << "pt: (" << keypoints[i].pt.x << ", " << keypoints[i].pt.y << ")\n";
             keypoints[i].octave = level;
             keypoints[i].size = patchSize*layerScale[level];
             keypoints[i].pt *= layerScale[level];
@@ -878,13 +822,7 @@ static int computeKeyPoints(const Mat& imagePyramid,
 
         responseOffset += nkeypoints;
         std::copy(keypoints.begin(), keypoints.end(), std::back_inserter(allKeypoints));
-        //if ( level == 3 ) {
-        //    cout << "scale: " << layerScale[level] << " level: " << level << "\n";
-        //    cout << "pt: (" << allKeypoints[focus_offset].pt.x << ", " << allKeypoints[focus_offset].pt.y << ")\n";
-        //    cout << response.row(focus_offset) << "\n";
-        //}
     }
-    return focus_offset; // For debugging
 }
 
 
@@ -904,7 +842,6 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
 
     bool do_keypoints = !useProvidedKeypoints;
     bool do_descriptors = _descriptors.needed();
-    int debug_idx = 0;
 
     if( (!do_keypoints && !do_descriptors) || _image.empty() )
         return;
@@ -965,7 +902,7 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
 
     // Get keypoints, those will hopefully be far enough from the border that no check will be required for the descriptor
     if( do_keypoints ) {
-        debug_idx = computeKeyPoints(imagePyramid, maskPyramid, diff_x, diff_y,
+        computeKeyPoints(imagePyramid, maskPyramid, diff_x, diff_y,
                          layerInfo, layerScale, keypoints, harrisResponse,
                          nfeatures, scaleFactor, edgeThreshold, patchSize, fastThreshold);
         HarrisResponses(image, diff_x(layerInfo[0]), diff_y(layerInfo[0]), keypoints, harrisResponse, 21, HARRIS_K);
@@ -983,7 +920,7 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         _descriptors.create(nkeypoints, dsize, CV_8U);
         Mat descriptors = _descriptors.getMat();
         computeDAFTDescriptors(imagePyramid, layerInfo, layerScale, harrisResponse,
-                               keypoints, descriptors, dsize, patchSize, debug_idx);
+                               keypoints, descriptors, dsize, patchSize);
     }
 }
 
