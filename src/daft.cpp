@@ -332,7 +332,7 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
     int step = diff_x.step1();
     int r = blockSize/2;
 
-    float scale = 1.f/(4 * blockSize * 255.f);
+    float scale = 1.f/(6 * blockSize * 255.f);
     float scale_sq_sq = scale * scale * scale * scale;
 
     AutoBuffer<int> ofsbuf(blockSize*blockSize);
@@ -349,8 +349,8 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
         int x0 = (int)kp_x;
         int y0 = (int)kp_y;
 
-        float xd = kp_x - (float)x0;
-        float yd = kp_y - (float)y0;
+        //float xd = kp_x - (float)x0;
+        //float yd = kp_y - (float)y0;
         //float xd_inv = 1 - xd;
         //float yd_inv = 1 - yd;
 
@@ -360,13 +360,12 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
 
         for( int k = 0; k < blockSize*blockSize; k++ )
         {
-
             const int* dx = dx0 + ofs[k];
             const int* dy = dy0 + ofs[k];
-            float Ix = (float)dx[-1]*(1-xd) + (float)dx[0] + (float)dx[1]*xd + (float)dx[-step]*(1-yd) + (float)dx[step]*yd;
-            float Iy = (float)dy[-1]*(1-xd) + (float)dy[0] + (float)dy[1]*xd + (float)dy[-step]*(1-yd) + (float)dy[step]*yd;
-            //int Ix = 1;
-            //int Iy = 1;
+            //float Ix = (float)dx[-1]*(1-xd) + (float)dx[0] + (float)dx[1]*xd + (float)dx[-step]*(1-yd) + (float)dx[step]*yd;
+            //float Iy = (float)dy[-1]*(1-xd) + (float)dy[0] + (float)dy[1]*xd + (float)dy[-step]*(1-yd) + (float)dy[step]*yd;
+            float Ix = (float)dx[-1] + 2*(float)dx[0] + (float)dx[1] + (float)dx[-step] + (float)dx[step];
+            float Iy = (float)dy[-1] + 2*(float)dy[0] + (float)dy[1] + (float)dy[-step] + (float)dy[step];
             a += (Ix*Ix);
             b += (Iy*Iy);
             c += (Ix*Iy);
@@ -796,29 +795,23 @@ static void computeKeyPoints(const Mat& imagePyramid,
         HarrisResponses(img, dx, dy, keypoints, cur_response, 7, HARRIS_K);
         KeyPointsFilter::retainBest(keypoints, featuresNum);
 
-
         nkeypoints = (int)keypoints.size();
-        //int index;
 
+        //Mat img_0 = imagePyramid(layerInfo[0]);
+        //Mat dx_0 = diff_x(layerInfo[0]);
+        //Mat dy_0 = diff_y(layerInfo[0]);
+        HarrisResponses(img, dx, dy, keypoints, cur_response, 15, HARRIS_K);
         for( i = 0; i < nkeypoints; i++ )
         {
             keypoints[i].octave = level;
             keypoints[i].size = patchSize*layerScale[level];
             keypoints[i].pt *= layerScale[level];
+            keypoints[i].class_id = 0;
+            float* response_row = response.ptr<float>(i + responseOffset);
+            float* cur_row = cur_response.ptr<float>(i);
+            for ( int j = 0; j < 5; j++ )
+                response_row[j] = cur_row[j];
         }
-        //Mat img_0 = imagePyramid(layerInfo[0]);
-        //Mat dx_0 = diff_x(layerInfo[0]);
-        //Mat dy_0 = diff_y(layerInfo[0]);
-        //HarrisResponses(img_0, dx_0, dy_0, keypoints, cur_response, 21, HARRIS_K);
-        //for( i = 0; i < nkeypoints; i++ )
-        //{
-        //    index = keypoints[i].class_id;
-        //    keypoints[i].class_id = 0;
-        //    float* response_row = response.ptr<float>(i + responseOffset);
-        //    float* cur_row = cur_response.ptr<float>(index);
-        //    for ( int j = 0; j < 5; j++ )
-        //        response_row[j] = cur_row[j];
-        //}
 
         responseOffset += nkeypoints;
         std::copy(keypoints.begin(), keypoints.end(), std::back_inserter(allKeypoints));
@@ -905,7 +898,6 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         computeKeyPoints(imagePyramid, maskPyramid, diff_x, diff_y,
                          layerInfo, layerScale, keypoints, harrisResponse,
                          nfeatures, scaleFactor, edgeThreshold, patchSize, fastThreshold);
-        HarrisResponses(image, diff_x(layerInfo[0]), diff_y(layerInfo[0]), keypoints, harrisResponse, 21, HARRIS_K);
     }
     else // supplied keypoints
     {
