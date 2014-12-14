@@ -374,16 +374,16 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
             e += Iy;
         }
         // Debug info:
-        if ( ptidx == 0 && pts[ptidx].octave == 3 )
-        {
-            cout << "\n\npoint: " << kp_x << ", " << kp_y << "\n";
-            cout << "xd: " << xd << ", x0: " << x0 << "\n";
-            cout << "a: " << a << "\tb: " << b << "\tc:" << c << "\n";
-            //cout << diff_x(Range(kp_y-r,kp_y-r+5), Range(kp_x-r, kp_x-r+5)) << "\n";
-            //cout << diff_y(Range(kp_y-r,kp_y-r+5), Range(kp_x-r, kp_x-r+5)) << "\n";
-            //cout << diff_y(Range(kp_y-2,kp_y+2+1), Range(kp_x-2, kp_x+2+1)) << "\n";
-            //cout << img(Range(kp_y-2,kp_y+2+1), Range(kp_x-2, kp_x+2+1)) << "\n";
-        }
+        //if ( ptidx == 0 && pts[ptidx].octave == 3 )
+        //{
+        //    cout << "\n\npoint: " << kp_x << ", " << kp_y << "\n";
+        //    cout << "xd: " << xd << ", x0: " << x0 << "\n";
+        //    cout << "a: " << a << "\tb: " << b << "\tc:" << c << "\n";
+        //    //cout << diff_x(Range(kp_y-r,kp_y-r+5), Range(kp_x-r, kp_x-r+5)) << "\n";
+        //    //cout << diff_y(Range(kp_y-r,kp_y-r+5), Range(kp_x-r, kp_x-r+5)) << "\n";
+        //    //cout << diff_y(Range(kp_y-2,kp_y+2+1), Range(kp_x-2, kp_x+2+1)) << "\n";
+        //    //cout << img(Range(kp_y-2,kp_y+2+1), Range(kp_x-2, kp_x+2+1)) << "\n";
+        //}
         pts[ptidx].response = ((float)a * b - (float)c * c -
                                harris_k * ((float)a + b) * ((float)a + b))*scale_sq_sq;
 
@@ -406,12 +406,12 @@ static inline float pick( const Mat& img, float x, float y, bool debug )
     float xd = (x - (float)x0);
     float yd = (y - (float)y0);
     const uchar* ptr = img.ptr<uchar>() + y0*step + x0;
-    if ( debug )
-    {
-        cout << "x: " << x << ", y: " << y << "\n";
-        cout << "x: " << x0 << ", y: " << y0 << "\n";
-        cout << "left: " << (int)ptr[-1] << ", center: " << (int)ptr[0] << ", right: " << (int)ptr[1] << ", top: " << (int)ptr[-step] << ", bottom: " << (int)ptr[step] << "\n";
-    }
+    //if ( debug )
+    //{
+    //    cout << "x: " << x << ", y: " << y << "\n";
+    //    cout << "x: " << x0 << ", y: " << y0 << "\n";
+    //    cout << "left: " << (int)ptr[-1] << ", center: " << (int)ptr[0] << ", right: " << (int)ptr[1] << ", top: " << (int)ptr[-step] << ", bottom: " << (int)ptr[step] << "\n";
+    //}
     return ptr[-1]*(1 - xd) + ptr[0] + ptr[1]*xd + ptr[-step]*(1-yd) + ptr[step]*yd;
 }
 
@@ -518,19 +518,10 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
         unsigned int min_idx = 0, max_idx = 0, byte_val = 0, l = (unsigned int)dsize*8;
         for (unsigned int j = 0; j < l; j++)
         {
-            // Matrix multiplication by hand
-            //float x0 = (p[2*j]*s[0] + p[2*j+1]*s[2] + x * scale);
-            //float y0 = (p[2*j]*s[1] + p[2*j+1]*s[3] + y * scale);
-            // points * skew.T + kp_pos
             float x0 = (p[2*j]*s[0] + p[2*j+1]*s[1])*scale + x;
             float y0 = (p[2*j]*s[2] + p[2*j+1]*s[3])*scale + y;
 
             picked = pick(img_roi, x0, y0, false);//, debug_idx == i && j < 5);
-            //if ( debug_idx == i && j < 5 )
-            //{
-            //    cout << "x0: " << x0 << ", y0: " << y0 << "\n";
-            //    cout << "picked: " << picked << "\n";
-            //}
             if (picked < min_val)
             {
                 min_idx = j % 4;
@@ -543,12 +534,13 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
             }
             if ((j+1) % 4 == 0) {
                 if ((j+1) % 8 == 0)
-                    desc[(j >> 3)] = (uchar)((byte_val << 4) + (max_idx + (min_idx << 2)));
+                    desc[(j >> 3)] = (uchar)((byte_val << 4) + ((max_idx << 2) + (min_idx)));
                 else
-                    byte_val = (max_idx + (min_idx << 2));
+                    byte_val = ((max_idx << 2) + min_idx);
                 min_val = 999; max_val = 0; // Reset
             }
         }
+
     }
 }
 
@@ -852,12 +844,12 @@ static int computeKeyPoints(const Mat& imagePyramid,
         // Filter remaining points based on their Harris Response
         HarrisResponses(img, dx, dy, keypoints, cur_response, 7, HARRIS_K);
         KeyPointsFilter::retainBest(keypoints, featuresNum);
-        if ( level == 3 )
-        {
-            keypoints[0].pt.x = 388.f; //
-            keypoints[0].pt.y = 255.f;
-            focus_offset = responseOffset;
-        }
+        //if ( level == 3 )
+        //{
+        //    keypoints[0].pt.x = 388.f; //
+        //    keypoints[0].pt.y = 255.f;
+        //    focus_offset = responseOffset;
+        //}
 
 
         nkeypoints = (int)keypoints.size();
