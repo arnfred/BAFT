@@ -45,19 +45,19 @@ int main(int argc, char *argv[]) {
   cout << "img1: " << img1File << "\t imgN: " << imgNFile << "\t H: " << HFile << "\n";
   int size = 128;
   float nndr = 0.8;
-  int patch = 30;
+  float patch = 28.8;
   float scaleFactor = 1.2;
   if (argc > 4)
     size = (int)atoi(argv[4]);
   if (argc > 5)
     nndr = (float)atof(argv[5]);
   if (argc > 6)
-    patch = (int)atoi(argv[6]);
+    patch = (float)atof(argv[6]);
   if (argc > 7)
     scaleFactor = (float)atof(argv[7]);
   string desc_matcher = "BruteForce-Hamming";
   if (desc_type == "sift")
-      string desc_matcher = "BruteForce";
+      string desc_matcher = "BruteForce-Hamming";
 
   // Open the input image
   img1 = imread(img1File, 1);

@@ -24,9 +24,8 @@ int main(int argc, char *argv[]) {
 
   // Define sizes and other variables
   std::vector<int> sizes { 16, 32, 64, 128 };
+  //std::vector<int> sizes { 1024 };
   std::vector<string> testsets { "bark", "bikes", "boat", "graf", "leuven", "trees", "ubc", "wall" };
-  int patch = 30;
-  float scaleFactor = 1.2;
   string desc_matcher = "BruteForce-Hamming";
 
   for (int i = 0; i < 6; i++)
@@ -52,7 +51,7 @@ int main(int argc, char *argv[]) {
         cout << testset << (i+1) << ": " << size << " bytes\n";
         // Create daft object
         Ptr<Feature2D> ddaft;
-        ddaft = DAFT::create(3000, size, patch, scaleFactor);
+        ddaft = DAFT::create(3000, size);
         // Detect daft features in the images
         vector<cv::KeyPoint> kptsN;
         cv::Mat descN;

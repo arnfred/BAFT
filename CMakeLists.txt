@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.4)
 
 # ============================================================================ #
 add_definitions(-DDEBUG -g -O3 -Wall -std=c++11 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE)
+#add_definitions(-DDEBUG -g -Wall -std=c++11 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE)
 if(COMMAND cmake_policy)
    cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
