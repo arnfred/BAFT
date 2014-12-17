@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
   cv::Mat imgN;
 
   // Define sizes and other variables
-  std::vector<int> sizes { 16, 32, 64, 128 };
+  std::vector<int> sizes { 16, 24, 32, 64, 128 };
   //std::vector<int> sizes { 1024 };
   std::vector<string> testsets { "bark", "bikes", "boat", "graf", "leuven", "trees", "ubc", "wall" };
   string desc_matcher = "BruteForce-Hamming";
