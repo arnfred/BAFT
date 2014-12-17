@@ -350,14 +350,9 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
         int x0 = (int)kp_x;
         int y0 = (int)kp_y;
 
-        //float xd = kp_x - (float)x0;
-        //float yd = kp_y - (float)y0;
-        //float xd_inv = 1 - xd;
-        //float yd_inv = 1 - yd;
-
         const int* dx0 = dx00 + (y0 - r)*step + x0 - r;
         const int* dy0 = dy00 + (y0 - r)*step + x0 - r;
-        float a = 0, b = 0, c = 0, d = 0, e = 0; // e is for debug
+        float a = 0, b = 0, c = 0; // e is for debug
 
         for( int k = 0; k < blockSize*blockSize; k++ )
         {
@@ -368,8 +363,6 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
             a += (float)(Ix*Ix);
             b += (float)(Iy*Iy);
             c += (float)(Ix*Iy);
-            d += (float)Ix;
-            e += (float)Iy;
         }
         pts[ptidx].response = ((float)a * b - (float)c * c -
                                harris_k * ((float)a + b) * ((float)a + b))*scale_sq_sq;
@@ -377,9 +370,6 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
         response.at<float>(ptidx,0) = (float)a;
         response.at<float>(ptidx,1) = (float)b;
         response.at<float>(ptidx,2) = (float)c;
-        response.at<float>(ptidx,3) = (float)d;
-        response.at<float>(ptidx,4) = (float)e;
-        pts[ptidx].class_id = ptidx;
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -431,7 +421,7 @@ computeSkew( const Mat& responses, Mat& skew)
 
         // Calculate transformation matrix based on the matrix multiplication
         // of skew `diag(eig_val)` and rotate [-1*vec[1] vec[0]; vec[0] vec[1]]
-        skew_row[0] = -1*-1*vec_p[1]*val_p[0];
+        skew_row[0] = vec_p[1]*val_p[0];
         skew_row[1] = -1*vec_p[0]*val_p[1];
         skew_row[2] = -1*vec_p[0]*val_p[0];
         skew_row[3] = -1*vec_p[1]*val_p[1];
@@ -447,7 +437,6 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
     int nkeypoints = (int)keypoints.size();
     Mat skew(harrisResponse.rows, 4, CV_32F), points_kp, s, img_roi;
     computeSkew(harrisResponse, skew);
-    skew *= 1.00;
 
     // Now for each keypoint, collect data for each point and construct the descriptor
     KeyPoint kp;
@@ -455,28 +444,20 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
     {
         // Find image region of interest in image pyramid
         kp = keypoints[i];
-        //float scale = 1.f / layerScale[kp.octave];
-        // TODO: Instead of scaling here, we might as well scale when generating the points
         float x = kp.pt.x / layerScale[kp.octave];
         float y = kp.pt.y / layerScale[kp.octave];
         img_roi = imagePyramid(layerInfo[kp.octave]); // TODO: this can break for unsupported keypoints
-        //img_roi = imagePyramid(layerInfo[0]);
-        //int step = img_roi.step;
         uchar* desc = descriptors.ptr<uchar>(i);
-        int skew_index = (kp.class_id == 0)*i + kp.class_id;
-        int skew_sign = 1 - 2*(kp.class_id != 0);
-        if (i > 2999)
-            cout << "skew index: " << skew_index << ", skew_sign: " << skew_sign << "\n";
 
         const float* p = (const float*)points; // points are defined at line 57
-        const float* s = skew.ptr<float>(skew_index);
+        const float* s = skew.ptr<float>(i);
 
         float min_val = 9999, max_val = 0, picked = 0;
         unsigned int min_idx = 0, max_idx = 0, byte_val = 0, l = (unsigned int)dsize*8;
         for (unsigned int j = 0; j < l; j++)
         {
-            float x0 = (p[2*j]*s[0] + p[2*j+1]*s[1])*skew_sign + x;
-            float y0 = (p[2*j]*s[2] + p[2*j+1]*s[3])*skew_sign + y;
+            float x0 = (p[2*j]*s[0] + p[2*j+1]*s[1]) + x;
+            float y0 = (p[2*j]*s[2] + p[2*j+1]*s[3]) + y;
 
             picked = pick(img_roi, x0, y0, false);
             if (picked < min_val)
@@ -494,7 +475,7 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
                     desc[(j >> 3)] = (uchar)((byte_val << 4) + ((max_idx << 2) + (min_idx)));
                 else
                     byte_val = ((max_idx << 2) + min_idx);
-                min_val = 999; max_val = 0; // Reset
+                min_val = 9999; max_val = 0; // Reset
             }
         }
 
@@ -775,10 +756,8 @@ static void computeKeyPoints(const Mat& imagePyramid,
     allKeypoints.clear();
     std::vector<KeyPoint> keypoints;
     keypoints.reserve(nfeaturesPerLevel[0]*2);
-    std::vector<KeyPoint> extra;
-    extra.reserve(nfeaturesPerLevel[0]);
 
-    Mat cur_response(nfeatures, 5, CV_32F);
+    Mat cur_response(nfeatures, 3, CV_32F);
     int responseOffset = 0;
 
     for( level = 0; level < nlevels; level++ )
@@ -804,35 +783,21 @@ static void computeKeyPoints(const Mat& imagePyramid,
         KeyPointsFilter::retainBest(keypoints, featuresNum);
 
         nkeypoints = (int)keypoints.size();
-
-        //Mat img_0 = imagePyramid(layerInfo[0]);
-        //Mat dx_0 = diff_x(layerInfo[0]);
-        //Mat dy_0 = diff_y(layerInfo[0]);
         HarrisResponses(img, dx, dy, keypoints, cur_response, 15, HARRIS_K);
         for( i = 0; i < nkeypoints; i++ )
         {
             keypoints[i].octave = level;
             keypoints[i].size = patchSize*layerScale[level];
             keypoints[i].pt *= layerScale[level];
-            keypoints[i].class_id = 0;
             float* response_row = response.ptr<float>(i + responseOffset);
             float* cur_row = cur_response.ptr<float>(i);
-            for ( int j = 0; j < 5; j++ )
+            for ( int j = 0; j < 3; j++ )
                 response_row[j] = cur_row[j];
-            //if (cur_row[0] > 1000*(cur_row[3]*cur_row[3]) ||
-            //    cur_row[1] > 1000*(cur_row[4]*cur_row[4]))
-            //{
-            //    extra.push_back(keypoints[i]);
-            //    extra[extra.size()-1].class_id = i + responseOffset;
-            //    cout << "extra length: " << extra.size() << "\n";
-            //}
         }
 
         responseOffset += nkeypoints;
         std::copy(keypoints.begin(), keypoints.end(), std::back_inserter(allKeypoints));
     }
-    if ( extra.size() > 0 )
-        std::copy(extra.begin(), extra.end(), std::back_inserter(allKeypoints));
 }
 
 
@@ -898,7 +863,7 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     std::vector<int> layerOfs(nLevels);
     std::vector<float> layerScale(nLevels);
     Mat imagePyramid, maskPyramid, diff_x, diff_y;
-    Mat harrisResponse(nfeatures, 5, CV_32F);
+    Mat harrisResponse(nfeatures, 3, CV_32F);
     Size bufSize = computeLayerInfo(image, border, scaleFactor, nLevels,
                                      layerInfo, layerOfs, layerScale);
     // create image pyramid
