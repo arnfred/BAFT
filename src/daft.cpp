@@ -320,12 +320,10 @@ static float points[256*4*2*8] =
  * blockSize x blockSize patch at given points in the image
  */
 static void
-HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
+HarrisResponses(const Mat& diff_x, const Mat& diff_y,
                 std::vector<KeyPoint>& pts,
                 Mat& response, int blockSize, float harris_k)
 {
-    CV_Assert( img.type() == CV_8UC1 && blockSize*blockSize <= 2048 );
-
     size_t ptidx, ptsize = pts.size();
 
     const int* dx00 = diff_x.ptr<int>();
@@ -335,13 +333,6 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
 
     float scale = 1.f/(3 * blockSize * 255.f);
     float scale_sq_sq = scale * scale * scale * scale;
-
-    AutoBuffer<int> ofsbuf(blockSize*blockSize);
-    int* ofs = ofsbuf;
-    for( int i = 0; i < blockSize; i++ )
-        for( int j = 0; j < blockSize; j++ )
-            ofs[i*blockSize + j] = (int)(i*step + j);
-
 
     for( ptidx = 0; ptidx < ptsize; ptidx++ )
     {
@@ -354,15 +345,18 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
         const int* dy0 = dy00 + (y0 - r)*step + x0 - r;
         float a = 0, b = 0, c = 0; // e is for debug
 
-        for( int k = 0; k < blockSize*blockSize; k++ )
+        for( int i = 0; i < blockSize; i++ )
         {
-            const int* dx = dx0 + ofs[k];
-            const int* dy = dy0 + ofs[k];
-            int Ix = dx[-step] + 1*dx[0] + dx[step];
-            int Iy = dy[-1] + 1*dy[0] + dy[1];
-            a += (float)(Ix*Ix);
-            b += (float)(Iy*Iy);
-            c += (float)(Ix*Iy);
+            for( int j = 0; j < blockSize; j++ )
+            {
+                const int* dx = dx0 + (i*step + j);
+                const int* dy = dy0 + (i*step + j);
+                int Ix = dx[-step] + 1*dx[0] + dx[step];
+                int Iy = dy[-1] + 1*dy[0] + dy[1];
+                a += (float)(Ix*Ix);
+                b += (float)(Iy*Iy);
+                c += (float)(Ix*Iy);
+            }
         }
         pts[ptidx].response = ((float)a * b - (float)c * c -
                                harris_k * ((float)a + b) * ((float)a + b))*scale_sq_sq;
@@ -772,27 +766,23 @@ static void computeKeyPoints(const Mat& imagePyramid,
         Ptr<FastFeatureDetector> fd = FastFeatureDetector::create(fastThreshold, true);
         fd->detect(img, keypoints, mask);
 
+        // Keep more points than necessary as FAST does not give amazing corners
+        KeyPointsFilter::retainBest(keypoints, 2 * featuresNum);
         // Remove keypoints very close to the border
         KeyPointsFilter::runByImageBorder(keypoints, img.size(), edgeThreshold);
 
-        // Keep more points than necessary as FAST does not give amazing corners
-        KeyPointsFilter::retainBest(keypoints, 2 * featuresNum);
-
         // Filter remaining points based on their Harris Response
-        HarrisResponses(img, dx, dy, keypoints, cur_response, 7, HARRIS_K);
+        HarrisResponses(dx, dy, keypoints, cur_response, 7, HARRIS_K);
         KeyPointsFilter::retainBest(keypoints, featuresNum);
 
         nkeypoints = (int)keypoints.size();
-        HarrisResponses(img, dx, dy, keypoints, cur_response, 15, HARRIS_K);
+        Mat resp = response(Range(responseOffset,responseOffset+nkeypoints), Range::all());
+        HarrisResponses(dx, dy, keypoints, resp, 15, HARRIS_K);
         for( i = 0; i < nkeypoints; i++ )
         {
             keypoints[i].octave = level;
             keypoints[i].size = patchSize*layerScale[level];
             keypoints[i].pt *= layerScale[level];
-            float* response_row = response.ptr<float>(i + responseOffset);
-            float* cur_row = cur_response.ptr<float>(i);
-            for ( int j = 0; j < 3; j++ )
-                response_row[j] = cur_row[j];
         }
 
         responseOffset += nkeypoints;
@@ -885,7 +875,7 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     else // supplied keypoints
     {
         KeyPointsFilter::runByImageBorder(keypoints, image.size(), edgeThreshold);
-        HarrisResponses(image, diff_x(layerInfo[0]), diff_y(layerInfo[0]), keypoints, harrisResponse, 21, HARRIS_K);
+        HarrisResponses(diff_x(layerInfo[0]), diff_y(layerInfo[0]), keypoints, harrisResponse, 21, HARRIS_K);
     }
 
     if( do_descriptors )
@@ -894,8 +884,6 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         {
             // preprocess the resized image
             Mat img = imagePyramid(layerInfo[level]);
-
-            //boxFilter(workingMat, workingMat, workingMat.depth(), Size(5,5), Point(-1,-1), true, BORDER_REFLECT_101);
             GaussianBlur(img, img, Size(7, 7), 2, 2, BORDER_REFLECT_101);
         }
         int dsize = descriptorSize();
