@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
         const string imgNFile = imgNStream.str();
         imgN = imread(imgNFile, 1);
 
-        cout << testset << (i+1) << ": " << size << " bytes\n";
+        cout << testset << "_" << (i+1) << ": " << size << " bytes\n";
         // Create daft object
         Ptr<Feature2D> ddaft;
         ddaft = DAFT::create(limit, size);

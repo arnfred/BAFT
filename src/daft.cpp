@@ -450,8 +450,9 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
         unsigned int min_idx = 0, max_idx = 0, byte_val = 0, l = (unsigned int)dsize*8;
         for (unsigned int j = 0; j < l; j++)
         {
-            float x0 = (p[2*j]*s[0] + p[2*j+1]*s[1]) + x;
-            float y0 = (p[2*j]*s[2] + p[2*j+1]*s[3]) + y;
+            float scale = 0.6;
+            float x0 = (p[2*j]*s[0] + p[2*j+1]*s[1])*scale + x;
+            float y0 = (p[2*j]*s[2] + p[2*j+1]*s[3])*scale + y;
 
             picked = pick(img_roi, x0, y0, false);
             if (picked < min_val)

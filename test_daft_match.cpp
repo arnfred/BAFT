@@ -31,7 +31,8 @@ int main(int argc, char *argv[]) {
   const string testset = argv[1];
   const string imgNumber = argv[2];
   string fileEnding = ".ppm";
-  if (testset == "boat")
+  if (testset == "boat" or testset == "abs_x10"
+      or testset == "abs_x4" or testset == "abs_x1")
     fileEnding = ".pgm";
 
   std::ostringstream img1Stream, imgNStream, HStream;
@@ -57,7 +58,7 @@ int main(int argc, char *argv[]) {
     scaleFactor = (float)atof(argv[7]);
   string desc_matcher = "BruteForce-Hamming";
   if (desc_type == "sift")
-      string desc_matcher = "BruteForce-Hamming";
+      string desc_matcher = "BruteForce-L2";
 
   // Open the input image
   img1 = imread(img1File, 1);
