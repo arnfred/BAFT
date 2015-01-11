@@ -412,7 +412,7 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints)
         // Declare pointers to the rows corresponding to keypoint `i`
         const float* resp_row = responses.ptr<float>(i);
         float* skew_row = skew.ptr<float>(i);
-        //int skew_sgn = sgn(resp_row[3]);
+        int skew_sgn = sgn(resp_row[3]);
 
         corr_p[0] = resp_row[0];
         corr_p[1] = resp_row[2];
@@ -426,15 +426,17 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints)
 
         // Normalize eigen values
         const float val_sq = std::sqrt(val_p[0]*val_p[1]);
-        val_p[0] = std::sqrt(val_p[0] / val_sq);// * skew_sgn;
-        val_p[1] = std::sqrt(val_p[1] / val_sq);// * skew_sgn;
+        val_p[0] = val_p[0] / val_sq * skew_sgn;
+        val_p[1] = val_p[1] / val_sq * skew_sgn;
+        //val_p[0] = std::sqrt(val_p[0] / val_sq);// * skew_sgn;
+        //val_p[1] = std::sqrt(val_p[1] / val_sq);// * skew_sgn;
 
         // Calculate transformation matrix based on the matrix multiplication
         // of skew `diag(eig_val)` and rotate [-1*vec[1] vec[0]; vec[0] vec[1]]
-        skew_row[0] = -1*-1*vec_p[1]*val_p[0];
-        skew_row[1] = -1*vec_p[0]*val_p[1];
-        skew_row[2] = -1*vec_p[0]*val_p[0];
-        skew_row[3] = -1*vec_p[1]*val_p[1];
+        skew_row[0] = -1*vec_p[1]*val_p[0];
+        skew_row[1] = vec_p[0]*val_p[1];
+        skew_row[2] = vec_p[0]*val_p[0];
+        skew_row[3] = vec_p[1]*val_p[1];
     }
 }
 
@@ -456,11 +458,14 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
         kp = keypoints[i];
         //float scale = 1.f / layerScale[kp.octave];
         // TODO: Instead of scaling here, we might as well scale when generating the points
-        float scale = layerScale[kp.octave] * 0.57554;
-        float x = kp.pt.x;
-        float y = kp.pt.y;
-        //img_roi = imagePyramid(layerInfo[kp.octave]); // TODO: this can break for unsupported keypoints
-        img_roi = imagePyramid(layerInfo[0]);
+        //float scale = layerScale[kp.octave] * 0.57554;
+        //float x = kp.pt.x;
+        //float y = kp.pt.y;
+        float scale = 0.57554*(19.f/29.f);
+        float x = kp.pt.x / layerScale[kp.octave];
+        float y = kp.pt.y / layerScale[kp.octave];
+        img_roi = imagePyramid(layerInfo[kp.octave]); // TODO: this can break for unsupported keypoints
+        //img_roi = imagePyramid(layerInfo[0]);
         //int step = img_roi.step;
         uchar* desc = descriptors.ptr<uchar>(i);
         const float* p = (const float*)points; // points are defined at line 57
@@ -800,25 +805,18 @@ static void computeKeyPoints(const Mat& imagePyramid,
         nkeypoints = (int)keypoints.size();
         //int index;
 
+        HarrisResponses(img, dx, dy, keypoints, cur_response, 15, HARRIS_K);
+        //HarrisResponses(img_0, dx_0, dy_0, keypoints, cur_response, 21, HARRIS_K);
         for( i = 0; i < nkeypoints; i++ )
         {
             keypoints[i].octave = level;
             keypoints[i].size = patchSize*layerScale[level];
             keypoints[i].pt *= layerScale[level];
+            float* response_row = response.ptr<float>(i + responseOffset);
+            float* cur_row = cur_response.ptr<float>(i);
+            for ( int j = 0; j < 5; j++ )
+                response_row[j] = cur_row[j];
         }
-        //Mat img_0 = imagePyramid(layerInfo[0]);
-        //Mat dx_0 = diff_x(layerInfo[0]);
-        //Mat dy_0 = diff_y(layerInfo[0]);
-        //HarrisResponses(img_0, dx_0, dy_0, keypoints, cur_response, 21, HARRIS_K);
-        //for( i = 0; i < nkeypoints; i++ )
-        //{
-        //    index = keypoints[i].class_id;
-        //    keypoints[i].class_id = 0;
-        //    float* response_row = response.ptr<float>(i + responseOffset);
-        //    float* cur_row = cur_response.ptr<float>(index);
-        //    for ( int j = 0; j < 5; j++ )
-        //        response_row[j] = cur_row[j];
-        //}
 
         responseOffset += nkeypoints;
         std::copy(keypoints.begin(), keypoints.end(), std::back_inserter(allKeypoints));
@@ -905,7 +903,6 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         computeKeyPoints(imagePyramid, maskPyramid, diff_x, diff_y,
                          layerInfo, layerScale, keypoints, harrisResponse,
                          nfeatures, scaleFactor, edgeThreshold, patchSize, fastThreshold);
-        HarrisResponses(image, diff_x(layerInfo[0]), diff_y(layerInfo[0]), keypoints, harrisResponse, 21, HARRIS_K);
     }
     else // supplied keypoints
     {

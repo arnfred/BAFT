@@ -24,24 +24,33 @@ int main(int argc, char *argv[]) {
 
   // Define sizes and other variables
   std::vector<int> sizes { 16, 32, 64, 128 };
-  std::vector<string> testsets { "bark", "bikes", "boat", "graf", "leuven", "trees", "ubc", "wall" };
-  int patch = 30;
-  float scaleFactor = 1.2;
-  string desc_matcher = "BruteForce-Hamming";
+  //std::vector<int> sizes { 1024 };
+  std::vector<string> testsets { "bark", "bikes", "boat", "graf", "leuven", "trees", "ubc", "wall", "abs_x1", "abs_x4", "abs_x10" };
 
-  for (int i = 0; i < 6; i++)
+  int limit = 3000; // default value
+  if (argc > 1)
+    limit = (int)atoi(argv[1]);
+
+  for (int j = 0; j < (int)sizes.size(); j++)
   {
+    int size = sizes[j];
 
-    for (int j = 0; j < (int)sizes.size(); j++)
+    for (int k = 0; k < (int)testsets.size(); k++)
     {
-      int size = sizes[j];
 
-      for (int k = 0; k < (int)testsets.size(); k++)
+      // How many images?
+      int nb_files = 6;
+      const string testset = testsets[k];
+      if (testset == "abs_x1" or testset == "abs_x4" or testset == "abs_x10")
+        nb_files = 9;
+
+      // Find file ending
+      string fileEnding = ".ppm";
+      if (testset == "boat" or testset == "abs_x1" or testset == "abs_x4" or testset == "abs_x10")
+        fileEnding = ".pgm";
+
+      for (int i = 0; i < nb_files; i++)
       {
-        const string testset = testsets[k];
-        string fileEnding = ".ppm";
-        if (testset == "boat")
-          fileEnding = ".pgm";
 
         // Save descriptors from image `i`
         std::ostringstream imgNStream;
@@ -49,10 +58,10 @@ int main(int argc, char *argv[]) {
         const string imgNFile = imgNStream.str();
         imgN = imread(imgNFile, 1);
 
-        cout << testset << (i+1) << ": " << size << " bytes\n";
+        cout << testset << "_" << (i+1) << ": " << size << " bytes\n";
         // Create daft object
         Ptr<Feature2D> ddaft;
-        ddaft = DAFT::create(3000, size, patch, scaleFactor);
+        ddaft = DAFT::create(limit, size);
         // Detect daft features in the images
         vector<cv::KeyPoint> kptsN;
         cv::Mat descN;

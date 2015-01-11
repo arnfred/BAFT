@@ -31,7 +31,8 @@ int main(int argc, char *argv[]) {
   const string testset = argv[1];
   const string imgNumber = argv[2];
   string fileEnding = ".ppm";
-  if (testset == "boat" || testset == "abs_x1" || testset == "abs_x4" || testset == "abs_x10")
+  if (testset == "boat" or testset == "abs_x10"
+      or testset == "abs_x4" or testset == "abs_x1")
     fileEnding = ".pgm";
 
   std::ostringstream img1Stream, imgNStream, HStream;
@@ -45,20 +46,20 @@ int main(int argc, char *argv[]) {
   cout << "img1: " << img1File << "\t imgN: " << imgNFile << "\t H: " << HFile << "\n";
   int size = 128;
   float nndr = 0.8;
-  int patch = 30;
+  float patch = 19;
   float scaleFactor = 1.2;
-  int limit = 3000;
+  int limit = 500;
   if (argc > 4)
     size = (int)atoi(argv[4]);
   if (argc > 5)
     nndr = (float)atof(argv[5]);
   if (argc > 6)
-    patch = (int)atoi(argv[6]);
+    patch = (float)atof(argv[6]);
   if (argc > 7)
     limit = (int)atoi(argv[7]);
   string desc_matcher = "BruteForce-Hamming";
   if (desc_type == "sift")
-      string desc_matcher = "BruteForce";
+      string desc_matcher = "BruteForce-L2";
 
   // Open the input image
   img1 = imread(img1File, 1);
@@ -103,7 +104,7 @@ int main(int argc, char *argv[]) {
   tmatch = 1000.0*(t2-t1) / cv::getTickFrequency();
 
   // Compute the inliers using the ground truth homography
-  float max_h_error = 2.5;
+  float max_h_error = 5.0;
   compute_inliers_homography(matches, inliers, H1toN, max_h_error);
 
   // Compute the inliers statistics
