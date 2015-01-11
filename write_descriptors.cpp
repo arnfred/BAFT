@@ -23,12 +23,11 @@ int main(int argc, char *argv[]) {
   cv::Mat imgN;
 
   // Define sizes and other variables
-  std::vector<int> sizes { 16, 24, 32, 64, 128 };
+  std::vector<int> sizes { 16, 32, 64, 128 };
   //std::vector<int> sizes { 1024 };
   std::vector<string> testsets { "bark", "bikes", "boat", "graf", "leuven", "trees", "ubc", "wall", "abs_x1", "abs_x4", "abs_x10" };
-  string desc_matcher = "BruteForce-Hamming";
 
-  int limit = 3000;
+  int limit = 3000; // default value
   if (argc > 1)
     limit = (int)atoi(argv[1]);
 

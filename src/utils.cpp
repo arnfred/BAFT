@@ -9,6 +9,7 @@
 #include <fstream>
 
 using namespace std;
+using namespace cv;
 
 /* ************************************************************************* */
 void draw_keypoints(cv::Mat& img, const std::vector<cv::KeyPoint>& kpts) {
@@ -90,23 +91,12 @@ void compute_inliers_homography(const std::vector<cv::Point2f>& matches,
                                 std::vector<cv::Point2f>& inliers,
                                 const cv::Mat& H, const float h_max_error) {
 
-  float h11 = 0.0, h12 = 0.0, h13 = 0.0;
-  float h21 = 0.0, h22 = 0.0, h23 = 0.0;
-  float h31 = 0.0, h32 = 0.0, h33 = 0.0;
   float x1 = 0.0, y1 = 0.0;
   float x2 = 0.0, y2 = 0.0;
   float x2m = 0.0, y2m = 0.0;
+  float x1m = 0.0, y1m = 0.0;
   float dist = 0.0, s = 0.0;
-
-  h11 = H.at<float>(0,0);
-  h12 = H.at<float>(0,1);
-  h13 = H.at<float>(0,2);
-  h21 = H.at<float>(1,0);
-  h22 = H.at<float>(1,1);
-  h23 = H.at<float>(1,2);
-  h31 = H.at<float>(2,0);
-  h32 = H.at<float>(2,1);
-  h33 = H.at<float>(2,2);
+  Mat p1(3, 1, CV_32F), p2(3, 1, CV_32F), p1_t, p2_t;
 
   inliers.clear();
 
@@ -116,10 +106,24 @@ void compute_inliers_homography(const std::vector<cv::Point2f>& matches,
     x2 = matches[i+1].x;
     y2 = matches[i+1].y;
 
-    s = h31*x1 + h32*y1 + h33;
-    x2m = (h11*x1 + h12*y1 + h13) / s;
-    y2m = (h21*x1 + h22*y1 + h23) / s;
-    dist = sqrt( pow(x2m-x2,2) + pow(y2m-y2,2));
+    p1.at<float>(0) = x1;
+    p1.at<float>(1) = y1;
+    p1.at<float>(2) = 1;
+    p1_t = H * p1;
+    x2m = p1_t.at<float>(0) / p1_t.at<float>(2);
+    y2m = p1_t.at<float>(1) / p1_t.at<float>(2);
+
+    p2.at<float>(0) = x2;
+    p2.at<float>(1) = y2;
+    p2.at<float>(2) = 1;
+    p2_t = H.inv() * p2;
+    x1m = p2_t.at<float>(0) / p2_t.at<float>(2);
+    y1m = p2_t.at<float>(1) / p2_t.at<float>(2);
+
+    //s = h31*x1 + h32*y1 + h33;
+    //x2m = (h11*x1 + h12*y1 + h13) / s;
+    //y2m = (h21*x1 + h22*y1 + h23) / s;
+    dist = sqrt( pow(x2m-x2,2) + pow(y2m-y2,2)) + sqrt( pow(x1m - x1, 2) + pow(y1m - y1, 2) );
 
     if (dist <= h_max_error) {
       inliers.push_back(matches[i]);

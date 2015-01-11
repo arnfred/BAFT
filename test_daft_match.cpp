@@ -46,8 +46,9 @@ int main(int argc, char *argv[]) {
   cout << "img1: " << img1File << "\t imgN: " << imgNFile << "\t H: " << HFile << "\n";
   int size = 128;
   float nndr = 0.8;
-  float patch = 28.8;
+  float patch = 19;
   float scaleFactor = 1.2;
+  int limit = 500;
   if (argc > 4)
     size = (int)atoi(argv[4]);
   if (argc > 5)
@@ -55,7 +56,7 @@ int main(int argc, char *argv[]) {
   if (argc > 6)
     patch = (float)atof(argv[6]);
   if (argc > 7)
-    scaleFactor = (float)atof(argv[7]);
+    limit = (int)atoi(argv[7]);
   string desc_matcher = "BruteForce-Hamming";
   if (desc_type == "sift")
       string desc_matcher = "BruteForce-L2";
@@ -68,11 +69,11 @@ int main(int argc, char *argv[]) {
   // Create daft object
   Ptr<Feature2D> ddaft;
   if (desc_type == "orb")
-      ddaft = ORB::create(3000);
+      ddaft = ORB::create(limit);
   else if (desc_type == "sift")
-      ddaft = xfeatures2d::SIFT::create(3000);
+      ddaft = xfeatures2d::SIFT::create(limit);
   else
-      ddaft = DAFT::create(3000, size, patch, scaleFactor);
+      ddaft = DAFT::create(limit, size, patch, scaleFactor);
 
   // Timing information
   double t1 = 0.0, t2 = 0.0;
@@ -103,7 +104,7 @@ int main(int argc, char *argv[]) {
   tmatch = 1000.0*(t2-t1) / cv::getTickFrequency();
 
   // Compute the inliers using the ground truth homography
-  float max_h_error = 2.5;
+  float max_h_error = 5.0;
   compute_inliers_homography(matches, inliers, H1toN, max_h_error);
 
   // Compute the inliers statistics

@@ -425,7 +425,7 @@ computeSkew( const Mat& responses, Mat& skew)
 static void
 computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerInfo,
                        const std::vector<float>& layerScale, const Mat& harrisResponse, std::vector<KeyPoint>& keypoints,
-                       Mat& descriptors, int dsize, float patchSize)
+                       Mat& descriptors, int dsize, float patchSize, float sizeScale)
 {
     // Compute skew matrix for each keypoint
     int nkeypoints = (int)keypoints.size();
@@ -450,9 +450,8 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
         unsigned int min_idx = 0, max_idx = 0, byte_val = 0, l = (unsigned int)dsize*8;
         for (unsigned int j = 0; j < l; j++)
         {
-            float scale = 0.6;
-            float x0 = (p[2*j]*s[0] + p[2*j+1]*s[1])*scale + x;
-            float y0 = (p[2*j]*s[2] + p[2*j+1]*s[3])*scale + y;
+            float x0 = (p[2*j]*s[0] + p[2*j+1]*s[1])*sizeScale + x;
+            float y0 = (p[2*j]*s[2] + p[2*j+1]*s[3])*sizeScale + y;
 
             picked = pick(img_roi, x0, y0, false);
             if (picked < min_val)
@@ -888,11 +887,12 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
             GaussianBlur(img, img, Size(7, 7), 2, 2, BORDER_REFLECT_101);
         }
         int dsize = descriptorSize();
+        float sizeScale = patchSize / 29;
         nkeypoints = (int)keypoints.size();
         _descriptors.create(nkeypoints, dsize, CV_8U);
         Mat descriptors = _descriptors.getMat();
         computeDAFTDescriptors(imagePyramid, layerInfo, layerScale, harrisResponse,
-                               keypoints, descriptors, dsize, patchSize);
+                               keypoints, descriptors, dsize, patchSize, sizeScale);
     }
 }
 
