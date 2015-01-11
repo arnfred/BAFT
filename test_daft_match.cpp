@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
   const string testset = argv[1];
   const string imgNumber = argv[2];
   string fileEnding = ".ppm";
-  if (testset == "boat")
+  if (testset == "boat" || testset == "abs_x1" || testset == "abs_x4" || testset == "abs_x10")
     fileEnding = ".pgm";
 
   std::ostringstream img1Stream, imgNStream, HStream;
@@ -47,6 +47,7 @@ int main(int argc, char *argv[]) {
   float nndr = 0.8;
   int patch = 30;
   float scaleFactor = 1.2;
+  int limit = 3000;
   if (argc > 4)
     size = (int)atoi(argv[4]);
   if (argc > 5)
@@ -54,7 +55,7 @@ int main(int argc, char *argv[]) {
   if (argc > 6)
     patch = (int)atoi(argv[6]);
   if (argc > 7)
-    scaleFactor = (float)atof(argv[7]);
+    limit = (int)atoi(argv[7]);
   string desc_matcher = "BruteForce-Hamming";
   if (desc_type == "sift")
       string desc_matcher = "BruteForce";
@@ -67,11 +68,11 @@ int main(int argc, char *argv[]) {
   // Create daft object
   Ptr<Feature2D> ddaft;
   if (desc_type == "orb")
-      ddaft = ORB::create(3000);
+      ddaft = ORB::create(limit);
   else if (desc_type == "sift")
-      ddaft = xfeatures2d::SIFT::create(3000);
+      ddaft = xfeatures2d::SIFT::create(limit);
   else
-      ddaft = DAFT::create(3000, size, patch, scaleFactor);
+      ddaft = DAFT::create(limit, size, patch, scaleFactor);
 
   // Timing information
   double t1 = 0.0, t2 = 0.0;
