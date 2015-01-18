@@ -95,7 +95,7 @@ void compute_inliers_homography(const std::vector<cv::Point2f>& matches,
   float x2 = 0.0, y2 = 0.0;
   float x2m = 0.0, y2m = 0.0;
   float x1m = 0.0, y1m = 0.0;
-  float dist = 0.0, s = 0.0;
+  float dist = 0.0;
   Mat p1(3, 1, CV_32F), p2(3, 1, CV_32F), p1_t, p2_t;
 
   inliers.clear();
