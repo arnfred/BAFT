@@ -441,6 +441,7 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
 {
     // Compute skew matrix for each keypoint
     int nkeypoints = (int)keypoints.size();
+    float scale_modifier = (float)patchSize / 50.f;
     Mat skew(nkeypoints, 4, CV_32F), points_kp, s, img_roi;
     computeSkew(harrisResponse, skew, nkeypoints);
 
@@ -453,13 +454,14 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
         //float scale = 1.f / layerScale[kp.octave];
         // TODO: Instead of scaling here, we might as well scale when generating the points
         //float scale = layerScale[kp.octave] * 0.57554;
-        float scale = layerScale[kp.octave] * 0.45;
-        float x = kp.pt.x;
-        float y = kp.pt.y;
-        //float x = kp.pt.x / layerScale[kp.octave];
-        //float y = kp.pt.y / layerScale[kp.octave];
-        //img_roi = imagePyramid(layerInfo[kp.octave]); // TODO: this can break for unsupported keypoints
-        img_roi = imagePyramid(layerInfo[0]);
+        //float scale = layerScale[kp.octave] * scale_modifier;
+        float scale = scale_modifier;
+        //float x = kp.pt.x;
+        //float y = kp.pt.y;
+        float x = kp.pt.x / layerScale[kp.octave];
+        float y = kp.pt.y / layerScale[kp.octave];
+        img_roi = imagePyramid(layerInfo[kp.octave]); // TODO: this can break for unsupported keypoints
+        //img_roi = imagePyramid(layerInfo[0]);
         //int step = img_roi.step;
         uchar* desc = descriptors.ptr<uchar>(i);
         const float* p = (const float*)points; // points are defined at line 57
@@ -924,12 +926,12 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
 
     if( do_descriptors )
     {
-        //for( level = 0; level < nLevels; level++ )
-        //{
-        //    // preprocess the resized image
-        //    Mat img = imagePyramid(layerInfo[level]);
-        //    GaussianBlur(img, img, Size(7, 7), 2, 2, BORDER_REFLECT_101);
-        //}
+        for( level = 0; level < nLevels; level++ )
+        {
+            // preprocess the resized image
+            Mat img = imagePyramid(layerInfo[level]);
+            GaussianBlur(img, img, Size(7, 7), 2, 2, BORDER_REFLECT_101);
+        }
         //Mat img = imagePyramid(layerInfo[0]);
         //GaussianBlur(img, img, Size(5, 5), 2, 2, BORDER_REFLECT_101);
         int dsize = descriptorSize();
