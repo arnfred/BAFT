@@ -926,14 +926,6 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
 
     if( do_descriptors )
     {
-        for( level = 0; level < nLevels; level++ )
-        {
-            // preprocess the resized image
-            Mat img = imagePyramid(layerInfo[level]);
-            GaussianBlur(img, img, Size(7, 7), 2, 2, BORDER_REFLECT_101);
-        }
-        //Mat img = imagePyramid(layerInfo[0]);
-        //GaussianBlur(img, img, Size(5, 5), 2, 2, BORDER_REFLECT_101);
         int dsize = descriptorSize();
         nkeypoints = (int)keypoints.size();
         _descriptors.create(nkeypoints, dsize, CV_8U);
