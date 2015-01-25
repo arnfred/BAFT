@@ -453,7 +453,7 @@ computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerI
         //float scale = 1.f / layerScale[kp.octave];
         // TODO: Instead of scaling here, we might as well scale when generating the points
         //float scale = layerScale[kp.octave] * 0.57554;
-        float scale = layerScale[kp.octave] * 0.62;
+        float scale = layerScale[kp.octave] * 0.45;
         float x = kp.pt.x;
         float y = kp.pt.y;
         //float x = kp.pt.x / layerScale[kp.octave];
@@ -855,7 +855,7 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         return;
 
     //int border = std::max(edgeThreshold, patchSize);
-    int border = 200;//std::max(edgeThreshold, patchSize);
+    int border = 30;//std::max(edgeThreshold, patchSize);
 
     Mat orig_image = _image.getMat();
     Mat image, mask = _mask.getMat();
