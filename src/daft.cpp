@@ -316,12 +316,12 @@ static float points[256*4*2] =
 
 /**
  * Function that computes the Harris responses in a
- * blockSize x blockSize patch at given points in the image
+ * 2*r x 2*r patch at given points in the image
  */
 static void
 HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
                 std::vector<KeyPoint>& pts,
-                Mat& response, int blockSize, float harris_k)
+                Mat& response, int r, float harris_k)
 {
     CV_Assert( img.type() == CV_8UC1 );// && blockSize*blockSize <= 2048 );
 
@@ -330,7 +330,6 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
     const int* dx00 = diff_x.ptr<int>();
     const int* dy00 = diff_y.ptr<int>();
     int step = diff_x.step1();
-    int r = blockSize/2;
 
     for( ptidx = 0; ptidx < ptsize; ptidx++ )
     {
@@ -344,19 +343,21 @@ HarrisResponses(const Mat& img, const Mat& diff_x, const Mat& diff_y,
         float xd = 0.5;
         float yd = 0.5;
 
-        const int* dx0 = dx00 + (y0 - r)*step + x0 - r;
-        const int* dy0 = dy00 + (y0 - r)*step + x0 - r;
+        const int* dx0 = dx00 + (y0)*step + x0;
+        const int* dy0 = dy00 + (y0)*step + x0;
         float a = 0, b = 0, c = 0, d = 0, e = 0; // e is for debug
 
-        for( int i = 0; i < blockSize; i++ )
+        for( int i = -r; i < r; i++ )
         {
-            for( int j = 0; j < blockSize; j++ )
+            for( int j = -r; j < r; j++ )
             {
                 const int ofs = i*step + j;
                 const int* dx = dx0 + ofs;
                 const int* dy = dy0 + ofs;
-                const float Ix = (float)dx[-1]*(1-xd) + 1*(float)dx[0] + (float)dx[1]*xd + (float)dx[-step]*(1-yd) + (float)dx[step]*yd;
-                const float Iy = (float)dy[-1]*(1-xd) + 1*(float)dy[0] + (float)dy[1]*xd + (float)dy[-step]*(1-yd) + (float)dy[step]*yd;
+                //const float Ix = (float)dx[-1]*(1-xd) + 1*(float)dx[0] + (float)dx[1]*xd + (float)dx[-step]*(1-yd) + (float)dx[step]*yd;
+                //const float Iy = (float)dy[-1]*(1-xd) + 1*(float)dy[0] + (float)dy[1]*xd + (float)dy[-step]*(1-yd) + (float)dy[step]*yd;
+                const float Ix = (float)dx[-1]*(xd) + (float)dx[0] + (float)dx[1]*xd + (float)dx[-step]*(yd) + (float)dx[step]*yd;
+                const float Iy = (float)dy[-1]*(xd) + (float)dy[0] + (float)dy[1]*xd + (float)dy[-step]*(yd) + (float)dy[step]*yd;
                 //int Ix = 1;
                 //int Iy = 1;
                 a += (Ix*Ix);
@@ -795,7 +796,7 @@ static void computeKeyPoints(const Mat& imagePyramid,
         KeyPointsFilter::retainBest(keypoints, 2 * featuresNum);
 
         // Filter remaining points based on their Harris Response
-        HarrisResponses(img, dx, dy, keypoints, cur_response, 2, HARRIS_K);
+        HarrisResponses(img, dx, dy, keypoints, cur_response, 1, HARRIS_K);
         KeyPointsFilter::retainBest(keypoints, featuresNum);
 
         if (level == 0) {
@@ -813,7 +814,7 @@ static void computeKeyPoints(const Mat& imagePyramid,
         //Mat dx_0 = diff_x(layerInfo[0]);
         //Mat dy_0 = diff_y(layerInfo[0]);
         //HarrisResponses(img_0, dx_0, dy_0, keypoints, cur_response, 6*2, HARRIS_K);
-        HarrisResponses(img, dx, dy, keypoints, cur_response, 10, HARRIS_K);
+        HarrisResponses(img, dx, dy, keypoints, cur_response, 6, HARRIS_K);
         for( i = 0; i < nkeypoints; i++ )
         {
             keypoints[i].octave = level;
