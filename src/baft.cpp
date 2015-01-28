@@ -33,9 +33,9 @@
 *********************************************************************/
 
 /** Authors: Ethan Rublee, Vincent Rabaud, Gary Bradski */
-/** Modified to create DAFT by: Jonas Arnfred */
+/** Modified to create BAFT by: Jonas Arnfred */
 
-#include "daft.h"
+#include "baft.h"
 
 #include <opencv2/core.hpp>
 #include <opencv2/flann/miniflann.hpp>
@@ -435,7 +435,7 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints)
 }
 
 static void
-computeDAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerInfo,
+computeBAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerInfo,
                        const std::vector<float>& layerScale, const Mat& harrisResponse, std::vector<KeyPoint>& keypoints,
                        Mat& descriptors, int dsize, int patchSize)
 {
@@ -507,10 +507,10 @@ static inline float getScale(int level, double scaleFactor)
 }
 
 
-class DAFT_Impl : public DAFT
+class BAFT_Impl : public BAFT
 {
 public:
-    explicit DAFT_Impl(int _nfeatures, int _size, int _patchSize, float _scaleFactor, int _nlevels, int _edgeThreshold,
+    explicit BAFT_Impl(int _nfeatures, int _size, int _patchSize, float _scaleFactor, int _nlevels, int _edgeThreshold,
              int _fastThreshold) :
         nfeatures(_nfeatures), size(_size), scaleFactor(_scaleFactor), nlevels(_nlevels),
         edgeThreshold(_edgeThreshold), patchSize(_patchSize), fastThreshold(_fastThreshold)
@@ -544,7 +544,7 @@ public:
     // returns the default norm type
     int defaultNorm() const;
 
-    // Compute the DAFT_Impl features and descriptors on an image
+    // Compute the BAFT_Impl features and descriptors on an image
     void detectAndCompute( InputArray image, InputArray mask, std::vector<KeyPoint>& keypoints,
                      OutputArray descriptors, bool useProvidedKeypoints=false );
 
@@ -559,17 +559,17 @@ protected:
     int fastThreshold;
 };
 
-int DAFT_Impl::descriptorSize() const
+int BAFT_Impl::descriptorSize() const
 {
     return size;
 }
 
-int DAFT_Impl::descriptorType() const
+int BAFT_Impl::descriptorType() const
 {
     return CV_8U;
 }
 
-int DAFT_Impl::defaultNorm() const
+int BAFT_Impl::defaultNorm() const
 {
     return NORM_HAMMING;
 }
@@ -745,7 +745,7 @@ static void computeImagePyramid(const Mat& image,
 }
 
 
-/** Compute the DAFT_Impl keypoints and their Harris Response on an image
+/** Compute the BAFT_Impl keypoints and their Harris Response on an image
  * @param image_pyramid the image pyramid to compute the features and descriptors on
  * @param mask_pyramid the masks to apply at every level
  * @param layerInfo the bounding rectangles of each image layer
@@ -836,7 +836,7 @@ static void computeKeyPoints(const Mat& imagePyramid,
 }
 
 
-/** Compute the DAFT_Impl features and descriptors on an image
+/** Compute the BAFT_Impl features and descriptors on an image
  * @param img the image to compute the features and descriptors on
  * @param mask the mask to apply
  * @param keypoints the resulting keypoints
@@ -844,7 +844,7 @@ static void computeKeyPoints(const Mat& imagePyramid,
  * @param do_keypoints if true, the keypoints are computed, otherwise used as an input
  * @param do_descriptors if true, also computes the descriptors
  */
-void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
+void BAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
                                  std::vector<KeyPoint>& keypoints,
                                  OutputArray _descriptors, bool useProvidedKeypoints )
 {
@@ -930,16 +930,16 @@ void DAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         nkeypoints = (int)keypoints.size();
         _descriptors.create(nkeypoints, dsize, CV_8U);
         Mat descriptors = _descriptors.getMat();
-        computeDAFTDescriptors(imagePyramid, layerInfo, layerScale, harrisResponse,
+        computeBAFTDescriptors(imagePyramid, layerInfo, layerScale, harrisResponse,
                                keypoints, descriptors, dsize, patchSize);
         cout << "Descriptor: " << descriptors(Range(0, 1), Range(0,10)) << "\n";
     }
 }
 
-Ptr<DAFT> DAFT::create(int nfeatures, int size, int patchSize, float scaleFactor, int nlevels, int edgeThreshold,
+Ptr<BAFT> BAFT::create(int nfeatures, int size, int patchSize, float scaleFactor, int nlevels, int edgeThreshold,
          int fastThreshold)
 {
-    return makePtr<DAFT_Impl>(nfeatures, size, patchSize, scaleFactor, nlevels, edgeThreshold,
+    return makePtr<BAFT_Impl>(nfeatures, size, patchSize, scaleFactor, nlevels, edgeThreshold,
                               fastThreshold);
 }
 

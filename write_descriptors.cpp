@@ -1,12 +1,12 @@
 /**
  * @file write_descriptors.cpp
- * @brief Write out descriptors for daft
+ * @brief Write out descriptors for baft
  * @date December 7, 2014
  * @author Jonas Toft Arnfred
  */
 
 #include "./src/utils.h"
-#include "./src/daft.h"
+#include "./src/baft.h"
 
 // System
 #include <string>
@@ -59,13 +59,13 @@ int main(int argc, char *argv[]) {
         imgN = imread(imgNFile, 1);
 
         cout << testset << "_" << (i+1) << ": " << size << " bytes\n";
-        // Create daft object
-        Ptr<Feature2D> ddaft;
-        ddaft = DAFT::create(limit, size);
-        // Detect daft features in the images
+        // Create baft object
+        Ptr<Feature2D> dbaft;
+        dbaft = BAFT::create(limit, size);
+        // Detect baft features in the images
         vector<cv::KeyPoint> kptsN;
         cv::Mat descN;
-        ddaft->detectAndCompute(imgN, cv::noArray(), kptsN, descN);
+        dbaft->detectAndCompute(imgN, cv::noArray(), kptsN, descN);
 
         // Write out descriptors
         std::ostringstream desc_file_name;

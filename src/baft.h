@@ -1,16 +1,16 @@
-#ifndef __OPENCV_DAFT_HPP__
-#define __OPENCV_DAFT_HPP__
+#ifndef __OPENCV_BAFT_HPP__
+#define __OPENCV_BAFT_HPP__
 
 #include <opencv2/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
 
 using namespace cv;
 
-class DAFT : public Feature2D
+class BAFT : public Feature2D
 {
 public:
 
-    CV_WRAP static Ptr<DAFT> create(int nfeatures=500, int size=128, int patchSize=30,
+    CV_WRAP static Ptr<BAFT> create(int nfeatures=500, int size=128, int patchSize=30,
             float scaleFactor=1.2f, int nlevels=8, int edgeThreshold=45, int fastThreshold=20);
 
     CV_WRAP virtual void setMaxFeatures(int maxFeatures) = 0;

@@ -1,12 +1,12 @@
 /**
- * @file test_daft.cpp
- * @brief Main program for testing OpenCV daft port in an image matching application
+ * @file test_baft.cpp
+ * @brief Main program for testing OpenCV baft port in an image matching application
  * @date Jun 05, 2014
  * @author Pablo F. Alcantarilla
  */
 
 #include "./src/utils.h"
-#include "./src/daft.h"
+#include "./src/baft.h"
 #include <opencv2/xfeatures2d.hpp>
 #include <opencv2/xfeatures2d/nonfree.hpp>
 
@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
 
   if (argc < 4) {
     cerr << "Error introducing input arguments!" << endl;
-    cerr << "The format needs to be: ./test_daft_match testset number descriptor" << endl;
+    cerr << "The format needs to be: ./test_baft_match testset number descriptor" << endl;
     return -1;
   }
 
@@ -66,28 +66,28 @@ int main(int argc, char *argv[]) {
   imgN = imread(imgNFile, 1);
   cv::Mat H1toN = read_homography(HFile);
 
-  // Create daft object
-  Ptr<Feature2D> ddaft;
+  // Create baft object
+  Ptr<Feature2D> dbaft;
   if (desc_type == "orb")
-      ddaft = ORB::create(limit);
+      dbaft = ORB::create(limit);
   else if (desc_type == "sift")
-      ddaft = xfeatures2d::SIFT::create(limit);
+      dbaft = xfeatures2d::SIFT::create(limit);
   else
-      ddaft = DAFT::create(limit, size, patch, scaleFactor);
+      dbaft = BAFT::create(limit, size, patch, scaleFactor);
 
   // Timing information
   double t1 = 0.0, t2 = 0.0;
-  double tdaft = 0.0, tmatch = 0.0;
+  double tbaft = 0.0, tmatch = 0.0;
 
-  // Detect daft features in the images
+  // Detect baft features in the images
   vector<cv::KeyPoint> kpts1, kptsN;
   cv::Mat desc1, descN;
 
   t1 = cv::getTickCount();
-  ddaft->detectAndCompute(img1, cv::noArray(), kpts1, desc1);
-  ddaft->detectAndCompute(imgN, cv::noArray(), kptsN, descN);
+  dbaft->detectAndCompute(img1, cv::noArray(), kpts1, desc1);
+  dbaft->detectAndCompute(imgN, cv::noArray(), kptsN, descN);
   t2 = cv::getTickCount();
-  tdaft = 1000.0*(t2-t1) / cv::getTickFrequency();
+  tbaft = 1000.0*(t2-t1) / cv::getTickFrequency();
 
   int nr_kpts1 = kpts1.size();
   int nr_kptsN = kptsN.size();
@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
   int nr_outliers = nr_matches - nr_inliers;
   float ratio = 100.0*((float) nr_inliers / (float) nr_matches);
 
-  cout << "daft Matching Results" << endl;
+  cout << "baft Matching Results" << endl;
   cout << "*******************************" << endl;
   cout << "# Keypoints 1:                        \t" << nr_kpts1 << endl;
   cout << "# Keypoints N:                        \t" << nr_kptsN << endl;
@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
   cout << "# Inliers:                            \t" << nr_inliers << endl;
   cout << "# Outliers:                           \t" << nr_outliers << endl;
   cout << "Inliers Ratio (%):                    \t" << ratio << endl;
-  cout << "Time Detection+Description (ms):      \t" << tdaft << endl;
+  cout << "Time Detection+Description (ms):      \t" << tbaft << endl;
   cout << "Time Matching (ms):                   \t" << tmatch << endl;
   cout << endl;
 
@@ -131,8 +131,8 @@ int main(int argc, char *argv[]) {
   draw_keypoints(imgN, kptsN);
   draw_inliers(img1, imgN, img_com, inliers);
 
-  cv::namedWindow("daft Matching", cv::WINDOW_KEEPRATIO);
-  cv::imshow("daft Matching", img_com);
+  cv::namedWindow("baft Matching", cv::WINDOW_KEEPRATIO);
+  cv::imshow("baft Matching", img_com);
   cv::waitKey(0);
 
   return 1;

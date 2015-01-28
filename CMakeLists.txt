@@ -1,8 +1,9 @@
-project(DAFT)
+project(BAFT)
 cmake_minimum_required(VERSION 2.4)
 
 # ============================================================================ #
 add_definitions(-DDEBUG -g -O3 -Wall -std=c++11 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE)
+#add_definitions(-DDEBUG -g -Wall -std=c++11 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE)
 if(COMMAND cmake_policy)
    cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
@@ -22,21 +23,21 @@ link_directories(
 
 # ============================================================================ #
 set(SRCS
-  ./src/daft.cpp
+  ./src/baft.cpp
   ./src/utils.cpp
 )
 # ============================================================================ #
-# DAFT tests
+# BAFT tests
 add_executable(
-  test_daft
-  test_daft.cpp
+  test_baft
+  test_baft.cpp
   ${SRCS}
 )
 
-# DAFT match tests
+# BAFT match tests
 add_executable(
-  test_daft_match
-  test_daft_match.cpp
+  test_baft_match
+  test_baft_match.cpp
   ${SRCS}
 )
 
@@ -48,12 +49,12 @@ add_executable(
 )
 
 target_link_libraries(
-  test_daft
+  test_baft
   ${OpenCV_LIBS}
 )
 
 target_link_libraries(
-  test_daft_match
+  test_baft_match
   ${OpenCV_LIBS}
 )
 
