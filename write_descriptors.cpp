@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
   // Define sizes and other variables
   std::vector<int> sizes { 16, 32, 64, 128 };
   //std::vector<int> sizes { 1024 };
-  std::vector<string> testsets { "bark", "bikes", "boat", "graf", "leuven", "trees", "ubc", "wall", "abs_x1", "abs_x4", "abs_x10" };
+  std::vector<string> testsets { "bark", "bikes", "boat", "graf", "leuven", "trees", "ubc", "wall", "abs_x1", "abs_x4", "abs_x10", "trans_t2", "trans_t4" };
 
   int limit = 3000; // default value
   if (argc > 1)
@@ -41,12 +41,12 @@ int main(int argc, char *argv[]) {
       // How many images?
       int nb_files = 6;
       const string testset = testsets[k];
-      if (testset == "abs_x1" or testset == "abs_x4" or testset == "abs_x10")
+      if (testset == "abs_x1" or testset == "abs_x4" or testset == "abs_x10" or testset == "trans_t2" or testset == "trans_t4")
         nb_files = 9;
 
       // Find file ending
       string fileEnding = ".ppm";
-      if (testset == "boat" or testset == "abs_x1" or testset == "abs_x4" or testset == "abs_x10")
+      if (testset == "boat" or testset == "abs_x1" or testset == "abs_x4" or testset == "abs_x10" or testset == "trans_t2" or testset == "trans_t4")
         fileEnding = ".pgm";
 
       for (int i = 0; i < nb_files; i++)
@@ -73,7 +73,7 @@ int main(int argc, char *argv[]) {
         ofstream desc_file;
         desc_file.open(desc_file_name.str());
         std::ostringstream pos_file_name;
-        pos_file_name << "../descriptors/" << testset << "_img" << (i+1) << ".pos";
+        pos_file_name << "../descriptors/" << testset << "_img" << (i+1) << ".kp";
         ofstream pos_file;
         pos_file.open(pos_file_name.str());
         uchar* desc_p = descN.ptr<uchar>();
@@ -84,7 +84,9 @@ int main(int argc, char *argv[]) {
             desc_file << (int)desc_p[m*descN.cols + n] << " ";
           }
           desc_file << "\n";
-          pos_file << kptsN[m].pt.x << " " << kptsN[m].pt.y << "\n";
+          pos_file << kptsN[m].pt.x << " " << kptsN[m].pt.y << " "
+                   << kptsN[m].response << " " << kptsN[m].size << " " 
+                   << kptsN[m].angle << " " << kptsN[m].octave << "\n";
         }
         desc_file.close();
         pos_file.close();
