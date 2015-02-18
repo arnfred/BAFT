@@ -350,7 +350,7 @@ HarrisResponses(InputArray _img, InputArray _diff_x, InputArray _diff_y,
 
         const int* dx0 = dx00 + (y0)*step + x0;
         const int* dy0 = dy00 + (y0)*step + x0;
-        float a = 0, b = 0, c = 0;
+        float a = 0, b = 0, c = 0, d = 0;
 
         for( int i = -r; i < r; i++ )
         {
@@ -364,12 +364,14 @@ HarrisResponses(InputArray _img, InputArray _diff_x, InputArray _diff_y,
                 a += (Ix*Ix);
                 b += (Iy*Iy);
                 c += (Ix*Iy);
+                d += Ix;
             }
         }
         if (compute_response) {
             response.at<float>(ptidx,0) = (float)a;
             response.at<float>(ptidx,1) = (float)b;
             response.at<float>(ptidx,2) = (float)c;
+            response.at<float>(ptidx,3) = (float)d;
         }
         else
             pts[ptidx].response = ((float)a * b - (float)c * c -
@@ -395,7 +397,7 @@ template <typename T> int sgn(T val) {
 }
 
 static void
-computeSkew( const Mat& responses, Mat& skew, int nkeypoints)
+computeSkew( const Mat& responses, Mat& skew, int nkeypoints, bool fullRotation)
 {
     Mat corr(2, 2, CV_32F), eig_vec, eig_val;
     float* corr_p = corr.ptr<float>();
@@ -404,7 +406,7 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints)
         // Declare pointers to the rows corresponding to keypoint `i`
         const float* resp_row = responses.ptr<float>(i);
         float* skew_row = skew.ptr<float>(i);
-        //int skew_sgn = sgn(resp_row[3]);
+        int skew_sgn = sgn(resp_row[3]);
 
         corr_p[0] = resp_row[0];
         corr_p[1] = resp_row[2];
@@ -418,10 +420,13 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints)
 
         // Normalize eigen values
         const float val_sq = std::sqrt(val_p[0]*val_p[1]);
-        //val_p[0] = std::sqrt(val_p[0] / val_sq);// * skew_sgn;
-        //val_p[1] = std::sqrt(val_p[1] / val_sq);// * skew_sgn;
-        val_p[0] = val_p[0] / val_sq;// * skew_sgn;
-        val_p[1] = val_p[1] / val_sq;// * skew_sgn;
+        if (fullRotation) {
+            val_p[0] = val_p[0] / val_sq * skew_sgn;
+            val_p[1] = val_p[1] / val_sq * skew_sgn;
+        } else {
+            val_p[0] = val_p[0] / val_sq;
+            val_p[1] = val_p[1] / val_sq;
+        }
 
         // Calculate transformation matrix based on the matrix multiplication
         // of skew `diag(eig_val)` and rotate [-1*vec[1] vec[0]; vec[0] vec[1]]
@@ -435,13 +440,13 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints)
 static void
 computeBAFTDescriptors( const Mat& imagePyramid, const std::vector<Rect>& layerInfo,
                        const std::vector<float>& layerScale, const Mat& harrisResponse, std::vector<KeyPoint>& keypoints,
-                       Mat& descriptors, int dsize, int patchSize)
+                       Mat& descriptors, int dsize, int patchSize, bool fullRotation)
 {
     // Compute skew matrix for each keypoint
     int nkeypoints = (int)keypoints.size();
     float scale_modifier = (float)patchSize / 50.f;
     Mat skew(nkeypoints, 4, CV_32F), points_kp, s, img_roi;
-    computeSkew(harrisResponse, skew, nkeypoints);
+    computeSkew(harrisResponse, skew, nkeypoints, fullRotation);
 
     // Now for each keypoint, collect data for each point and construct the descriptor
     KeyPoint kp;
@@ -497,10 +502,14 @@ static inline float getScale(int level, double scaleFactor)
 class BAFT_Impl : public BAFT
 {
 public:
-    explicit BAFT_Impl(int _nfeatures, int _size, int _patchSize, float _scaleFactor, int _nlevels, int _edgeThreshold,
-             int _fastThreshold) :
-        nfeatures(_nfeatures), size(_size), scaleFactor(_scaleFactor), nlevels(_nlevels),
-        edgeThreshold(_edgeThreshold), patchSize(_patchSize), fastThreshold(_fastThreshold)
+    explicit BAFT_Impl(int _nfeatures, int _size, int _patchSize,
+                       int _gaussianBlurSize, bool _fullRotation,
+                       float _scaleFactor, int _nlevels,
+                       int _edgeThreshold, int _fastThreshold) :
+        nfeatures(_nfeatures), size(_size), patchSize(_patchSize),
+        gaussianBlurSize(_gaussianBlurSize), fullRotation(_fullRotation),
+        scaleFactor(_scaleFactor), nlevels(_nlevels), edgeThreshold(_edgeThreshold),
+        fastThreshold(_fastThreshold)
     {}
 
     void setMaxFeatures(int maxFeatures) { nfeatures = maxFeatures; }
@@ -508,6 +517,15 @@ public:
 
     void setSize(int size_) { size = size_; }
     int getSize() const { return size; }
+
+    void setPatchSize(int patchSize_) { patchSize = patchSize_; }
+    int getPatchSize() const { return patchSize; }
+
+    void setGaussianBlurSize(int gaussianBlurSize_) { gaussianBlurSize = gaussianBlurSize_; }
+    int getGaussianBlurSize() const { return gaussianBlurSize; }
+
+    void setFullRotation(bool fullRotation_) { fullRotation = fullRotation_; }
+    bool getFullRotation() const { return fullRotation; }
 
     void setScaleFactor(double scaleFactor_) { scaleFactor = scaleFactor_; }
     double getScaleFactor() const { return scaleFactor; }
@@ -517,9 +535,6 @@ public:
 
     void setEdgeThreshold(int edgeThreshold_) { edgeThreshold = edgeThreshold_; }
     int getEdgeThreshold() const { return edgeThreshold; }
-
-    void setPatchSize(int patchSize_) { patchSize = patchSize_; }
-    int getPatchSize() const { return patchSize; }
 
     void setFastThreshold(int fastThreshold_) { fastThreshold = fastThreshold_; }
     int getFastThreshold() const { return fastThreshold; }
@@ -539,10 +554,12 @@ protected:
 
     int nfeatures;
     int size;
+    int patchSize;
+    int gaussianBlurSize;
+    bool fullRotation;
     double scaleFactor;
     int nlevels;
     int edgeThreshold;
-    int patchSize;
     int fastThreshold;
 };
 
@@ -767,7 +784,7 @@ static void computeKeyPoints(InputArray _imagePyramid,
     std::vector<KeyPoint> keypoints;
     keypoints.reserve(nfeaturesPerLevel[0]*2);
 
-    Mat cur_response(nfeatures, 3, CV_32F);
+    Mat cur_response(nfeatures, 4, CV_32F);
     int responseOffset = 0;
 
     for( level = 0; level < nlevels; level++ )
@@ -800,7 +817,6 @@ static void computeKeyPoints(InputArray _imagePyramid,
             keypoints[i].size = patchSize*layerScale[level];
             keypoints[i].pt *= layerScale[level];
             int index = i;
-            //keypoints[i].class_id = 0;
             float* response_row = response.ptr<float>(i + responseOffset);
             float* cur_row = cur_response.ptr<float>(index);
             for ( int j = 0; j < 3; j++ )
@@ -867,7 +883,7 @@ void BAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
     std::vector<int> layerOfs(nLevels);
     std::vector<float> layerScale(nLevels);
     Mat imagePyramid, maskPyramid, diff_x, diff_y;
-    Mat harrisResponse(nfeatures, 3, CV_32F);
+    Mat harrisResponse(nfeatures, 4, CV_32F);
     Size bufSize = computeLayerInfo(image, border, scaleFactor, nLevels,
                                      layerInfo, layerOfs, layerScale);
     // create image pyramid
@@ -899,15 +915,26 @@ void BAFT_Impl::detectAndCompute( InputArray _image, InputArray _mask,
         nkeypoints = (int)keypoints.size();
         _descriptors.create(nkeypoints, dsize, CV_8U);
         Mat descriptors = _descriptors.getMat();
+        if (gaussianBlurSize > 0) {
+            int s = gaussianBlurSize;
+            for( level = 0; level < nLevels; level++ )
+            {
+                Mat workingMat = imagePyramid(layerInfo[level]);
+                GaussianBlur(workingMat, workingMat, Size(s, s), 2, 2, BORDER_REFLECT_101);
+            }
+        }
         computeBAFTDescriptors(imagePyramid, layerInfo, layerScale, harrisResponse,
-                               keypoints, descriptors, dsize, patchSize);
+                               keypoints, descriptors, dsize, patchSize, fullRotation);
     }
 }
 
-Ptr<BAFT> BAFT::create(int nfeatures, int size, int patchSize, float scaleFactor, int nlevels, int edgeThreshold,
-         int fastThreshold)
+Ptr<BAFT> BAFT::create(int nfeatures, int size, int patchSize,
+                       int gaussianBlurSize, bool fullRotation,
+                       float scaleFactor, int nlevels,
+                       int edgeThreshold, int fastThreshold)
 {
-    return makePtr<BAFT_Impl>(nfeatures, size, patchSize, scaleFactor, nlevels, edgeThreshold,
-                              fastThreshold);
+    return makePtr<BAFT_Impl>(nfeatures, size, patchSize, gaussianBlurSize,
+                              fullRotation, scaleFactor, nlevels,
+                              edgeThreshold, fastThreshold);
 }
 

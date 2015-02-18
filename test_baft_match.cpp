@@ -47,8 +47,9 @@ int main(int argc, char *argv[]) {
   int size = 128;
   float nndr = 0.8;
   float patch = 19;
-  float scaleFactor = 1.2;
-  int limit = 500;
+  int limit = 1000;
+  int blur = 0;
+  bool rotate = false;
   if (argc > 4)
     size = (int)atoi(argv[4]);
   if (argc > 5)
@@ -57,6 +58,10 @@ int main(int argc, char *argv[]) {
     patch = (float)atof(argv[6]);
   if (argc > 7)
     limit = (int)atoi(argv[7]);
+  if (argc > 8)
+    blur = (int)atoi(argv[8]);
+  if (argc > 9)
+    rotate = (bool)atoi(argv[9]);
   string desc_matcher = "BruteForce-Hamming";
   if (desc_type == "sift")
       string desc_matcher = "BruteForce-L2";
@@ -73,7 +78,7 @@ int main(int argc, char *argv[]) {
   else if (desc_type == "sift")
       dbaft = xfeatures2d::SIFT::create(limit);
   else
-      dbaft = BAFT::create(limit, size, patch, scaleFactor);
+      dbaft = BAFT::create(limit, size, patch, blur, rotate);
 
   // Timing information
   double t1 = 0.0, t2 = 0.0;

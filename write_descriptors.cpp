@@ -28,8 +28,17 @@ int main(int argc, char *argv[]) {
   std::vector<string> testsets { "bark", "bikes", "boat", "graf", "leuven", "trees", "ubc", "wall", "abs_x1", "abs_x4", "abs_x10", "trans_t2", "trans_t4" };
 
   int limit = 3000; // default value
+  int blur = 0; // default value
+  bool rotate = 0; // default value
+  int patchSize = 30;
   if (argc > 1)
     limit = (int)atoi(argv[1]);
+  if (argc > 2)
+    blur = (int)atoi(argv[2]);
+  if (argc > 3)
+    rotate = (int)atoi(argv[3]);
+  if (argc > 4)
+    patchSize = (int)atoi(argv[4]);
 
   for (int j = 0; j < (int)sizes.size(); j++)
   {
@@ -61,7 +70,7 @@ int main(int argc, char *argv[]) {
         cout << testset << "_" << (i+1) << ": " << size << " bytes\n";
         // Create baft object
         Ptr<Feature2D> dbaft;
-        dbaft = BAFT::create(limit, size);
+        dbaft = BAFT::create(limit, size, patchSize, blur, rotate);
         // Detect baft features in the images
         vector<cv::KeyPoint> kptsN;
         cv::Mat descN;
