@@ -336,7 +336,9 @@ HarrisResponses(InputArray _img, InputArray _diff_x, InputArray _diff_y,
 
     const int* dx00 = diff_x.ptr<int>();
     const int* dy00 = diff_y.ptr<int>();
+    float* r00 = response.ptr<float>();
     int step = diff_x.step1();
+    int r_step = response.step1();
 
     for( ptidx = 0; ptidx < ptsize; ptidx++ )
     {
@@ -345,12 +347,15 @@ HarrisResponses(InputArray _img, InputArray _diff_x, InputArray _diff_y,
         int x0 = (int)kp_x;
         int y0 = (int)kp_y;
 
+        //float xd = 2;
+        //float yd = 2;
         float xd = 0.5;
         float yd = 0.5;
 
         const int* dx0 = dx00 + (y0)*step + x0;
         const int* dy0 = dy00 + (y0)*step + x0;
-        float a = 0, b = 0, c = 0, d = 0;
+        int a = 0, b = 0, c = 0, d = 0;
+        float* r0 = r00 + ptidx*r_step;
 
         for( int i = -r; i < r; i++ )
         {
@@ -359,8 +364,8 @@ HarrisResponses(InputArray _img, InputArray _diff_x, InputArray _diff_y,
                 const int ofs = i*step + j;
                 const int* dx = dx0 + ofs;
                 const int* dy = dy0 + ofs;
-                const float Ix = (float)dx[-1]*(xd) + (float)dx[0] + (float)dx[1]*xd + (float)dx[-step]*(yd) + (float)dx[step]*yd;
-                const float Iy = (float)dy[-1]*(xd) + (float)dy[0] + (float)dy[1]*xd + (float)dy[-step]*(yd) + (float)dy[step]*yd;
+                const int Ix = (float)dx[-1]*(xd) + (float)dx[0] + (float)dx[1]*xd + (float)dx[-step]*(yd) + (float)dx[step]*yd;
+                const int Iy = (float)dy[-1]*(xd) + (float)dy[0] + (float)dy[1]*xd + (float)dy[-step]*(yd) + (float)dy[step]*yd;
                 a += (Ix*Ix);
                 b += (Iy*Iy);
                 c += (Ix*Iy);
@@ -368,10 +373,10 @@ HarrisResponses(InputArray _img, InputArray _diff_x, InputArray _diff_y,
             }
         }
         if (compute_response) {
-            response.at<float>(ptidx,0) = (float)a;
-            response.at<float>(ptidx,1) = (float)b;
-            response.at<float>(ptidx,2) = (float)c;
-            response.at<float>(ptidx,3) = (float)d;
+            r0[0] = (float)a;
+            r0[1] = (float)b;
+            r0[2] = (float)c;
+            r0[3] = (float)d;
         }
         else
             pts[ptidx].response = ((float)a * b - (float)c * c -
@@ -399,8 +404,6 @@ template <typename T> int sgn(T val) {
 static void
 computeSkew( const Mat& responses, Mat& skew, int nkeypoints, bool fullRotation)
 {
-    Mat corr(2, 2, CV_32F), eig_vec, eig_val;
-    float* corr_p = corr.ptr<float>();
     for ( int i = 0; i < nkeypoints; i++ )
     {
         // Declare pointers to the rows corresponding to keypoint `i`
@@ -408,32 +411,35 @@ computeSkew( const Mat& responses, Mat& skew, int nkeypoints, bool fullRotation)
         float* skew_row = skew.ptr<float>(i);
         int skew_sgn = sgn(resp_row[3]);
 
-        corr_p[0] = resp_row[0];
-        corr_p[1] = resp_row[2];
-        corr_p[2] = resp_row[2];
-        corr_p[3] = resp_row[1];
+        // Calculate eigenvectors and values
+        float a = resp_row[0], b = resp_row[2], c = resp_row[2], d = resp_row[1];
+        float T = a + d;
+        float T2 = T*T;
+        float D = a*d - b*c;
+        float L1 = T/2.f + std::sqrt(T2/4.f-D);
+        float L2 = T/2 - std::sqrt(T2/4-D);
+        float V1 = -1*b;
+        float V2 = a - L1;
 
-        // Find eigenvectors
-        eigen(corr, eig_val, eig_vec);
-        float* val_p = eig_val.ptr<float>();
-        const float* vec_p = eig_vec.ptr<float>();
-
-        // Normalize eigen values
-        const float val_sq = std::sqrt(val_p[0]*val_p[1]);
+        // Normalize eigenvectors and values
+        float V_norm = std::sqrt(V1*V1 + V2*V2);
+        V1 = V1 / V_norm;
+        V2 = V2 / V_norm;
+        const float val_sq = std::sqrt(L1*L2);
         if (fullRotation) {
-            val_p[0] = val_p[0] / val_sq * skew_sgn;
-            val_p[1] = val_p[1] / val_sq * skew_sgn;
+            L1 = L1 / val_sq * skew_sgn;
+            L2 = L2 / val_sq * skew_sgn;
         } else {
-            val_p[0] = val_p[0] / val_sq;
-            val_p[1] = val_p[1] / val_sq;
+            L1 = L1 / val_sq;
+            L2 = L2 / val_sq;
         }
 
         // Calculate transformation matrix based on the matrix multiplication
         // of skew `diag(eig_val)` and rotate [-1*vec[1] vec[0]; vec[0] vec[1]]
-        skew_row[0] = -1*vec_p[1]*val_p[0];
-        skew_row[1] = vec_p[0]*val_p[1];
-        skew_row[2] = vec_p[0]*val_p[0];
-        skew_row[3] = vec_p[1]*val_p[1];
+        skew_row[0] = -1*V2*L1;
+        skew_row[1] = V1*L2;
+        skew_row[2] = V1*L1;
+        skew_row[3] = V2*L2;
     }
 }
 
@@ -819,7 +825,7 @@ static void computeKeyPoints(InputArray _imagePyramid,
             int index = i;
             float* response_row = response.ptr<float>(i + responseOffset);
             float* cur_row = cur_response.ptr<float>(index);
-            for ( int j = 0; j < 3; j++ )
+            for ( int j = 0; j < 4; j++ )
                 response_row[j] = cur_row[j];
         }
 
