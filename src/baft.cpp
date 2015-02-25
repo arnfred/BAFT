@@ -347,10 +347,10 @@ HarrisResponses(InputArray _img, InputArray _diff_x, InputArray _diff_y,
         int x0 = (int)kp_x;
         int y0 = (int)kp_y;
 
-        //float xd = 2;
-        //float yd = 2;
-        float xd = 0.5;
-        float yd = 0.5;
+        float xd = 2;
+        float yd = 2;
+        //float xd = 0.5;
+        //float yd = 0.5;
 
         const int* dx0 = dx00 + (y0)*step + x0;
         const int* dy0 = dy00 + (y0)*step + x0;
