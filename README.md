@@ -8,11 +8,11 @@ Date: 2017-06-15
 You can get the latest version of the code from github:
 `https://github.com/arnfred/BAFT`
 
-More details about the automated cleaning process can be found in the following paper:
+More details about the feature transform and its performance/benchmarking can be found in the following paper:
 
-J. T. Arnfred, V. D. Nguyen, S. Winkler. BAFT: Binary Affine Feature Transform. In Proc. IEEE International Conference on Image Processing (ICIP), Beijing, China, Sept. 17-20, 2017. (available at `http://vintage.winklerbros.net/publications.html`)
+J. T. Arnfred, V. D. Nguyen, S. Winkler. BAFT: Binary Affine Feature Transform. In Proc. IEEE International Conference on Image Processing (ICIP), Beijing, China, Sept. 17-20, 2017. ([available for download](http://vintage.winklerbros.net/publications.html))
 
-Please cite the above paper if you use the FaceScrub dataset. 
+Please cite the above paper if you use BAFT. 
 
 ### How to install and run:
 As a prerequisite you will have to install opencv 2.4.10. [Download the sources](http://sourceforge.net/projects/opencvlibrary/files/opencv-unix/2.4.10/opencv-2.4.10.zip/download), navigate to the directory and follow these steps:
